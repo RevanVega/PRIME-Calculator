@@ -176,6 +176,7 @@ export default function CurrentIncomeSummary() {
 
   const getRowValuesDetailed = (row: ProjectionRow) => {
     const acctMul = 1 - taxRates.accountsPct / 100;
+    const ad = row.accountDraws as ProjectionRow["accountDraws"];
     if (showPostTax) {
       const earnedClient = taxMul(row.earnedIncomeClient, taxRates.earnedPct);
       const earnedSpouse = taxMul(row.earnedIncomeSpouse, taxRates.earnedPct);
@@ -184,11 +185,21 @@ export default function CurrentIncomeSummary() {
       const pensionClient = taxMul(row.pensionOtherRentalClient, taxRates.pensionOtherPct);
       const pensionSpouse = taxMul(row.pensionOtherRentalSpouse, taxRates.pensionOtherPct);
       const draws = {
-        qualified: row.accountDraws.qualified * acctMul,
-        roth: row.accountDraws.roth * acctMul,
-        taxable: row.accountDraws.taxable * acctMul,
-        cash: row.accountDraws.cash * acctMul,
-        insurance: row.accountDraws.insurance * acctMul,
+        qualified: ad.qualified * acctMul,
+        roth: ad.roth * acctMul,
+        taxable: ad.taxable * acctMul,
+        cash: ad.cash * acctMul,
+        insurance: ad.insurance * acctMul,
+        qualifiedClient: (ad.qualifiedClient ?? 0) * acctMul,
+        qualifiedSpouse: (ad.qualifiedSpouse ?? 0) * acctMul,
+        rothClient: (ad.rothClient ?? 0) * acctMul,
+        rothSpouse: (ad.rothSpouse ?? 0) * acctMul,
+        taxableClient: (ad.taxableClient ?? 0) * acctMul,
+        taxableSpouse: (ad.taxableSpouse ?? 0) * acctMul,
+        cashClient: (ad.cashClient ?? 0) * acctMul,
+        cashSpouse: (ad.cashSpouse ?? 0) * acctMul,
+        insuranceClient: (ad.insuranceClient ?? 0) * acctMul,
+        insuranceSpouse: (ad.insuranceSpouse ?? 0) * acctMul,
       };
       const annualTotal = earnedClient + earnedSpouse + ssClient + ssSpouse + pensionClient + pensionSpouse +
         draws.qualified + draws.roth + draws.taxable + draws.cash + draws.insurance;
@@ -214,7 +225,7 @@ export default function CurrentIncomeSummary() {
       ssSpouse: row.socialSecuritySpouse,
       pensionClient: row.pensionOtherRentalClient,
       pensionSpouse: row.pensionOtherRentalSpouse,
-      accountDraws: row.accountDraws,
+      accountDraws: ad,
       totalDisplay: isMonthly ? row.monthlyTotal : row.annualTotal,
       guaranteedPct: row.guaranteedPct,
     };
@@ -231,7 +242,64 @@ export default function CurrentIncomeSummary() {
 
   const clientLabel = client.name || "Client";
   const spouseLabel = spouse.name || "Spouse";
-  const totalCols = showByAccount ? 17 : 9;
+
+  const detailedColumnVisibility = useMemo(() => {
+    const rows = current.rows;
+    const some = (fn: (r: ProjectionRow) => number) => rows.some((r) => fn(r) !== 0);
+    const ad = (r: ProjectionRow) => r.accountDraws as ProjectionRow["accountDraws"];
+    const showAgeClient = true;
+    const showAgeSpouse = hasSpouse && some((r) => r.spouseAge);
+    const showEarnedClient = some((r) => r.earnedIncomeClient);
+    const showEarnedSpouse = some((r) => r.earnedIncomeSpouse);
+    const showSSClient = some((r) => r.socialSecurityClient);
+    const showSSSpouse = some((r) => r.socialSecuritySpouse);
+    const showPensionClient = some((r) => r.pensionOtherRentalClient);
+    const showPensionSpouse = some((r) => r.pensionOtherRentalSpouse);
+    const showQualifiedClient = some((r) => ad(r).qualifiedClient ?? 0);
+    const showQualifiedSpouse = some((r) => ad(r).qualifiedSpouse ?? 0);
+    const showRothClient = some((r) => ad(r).rothClient ?? 0);
+    const showRothSpouse = some((r) => ad(r).rothSpouse ?? 0);
+    const showTaxableClient = some((r) => ad(r).taxableClient ?? 0);
+    const showTaxableSpouse = some((r) => ad(r).taxableSpouse ?? 0);
+    const showCashClient = some((r) => ad(r).cashClient ?? 0);
+    const showCashSpouse = some((r) => ad(r).cashSpouse ?? 0);
+    const showInsuranceClient = some((r) => ad(r).insuranceClient ?? 0);
+    const showInsuranceSpouse = some((r) => ad(r).insuranceSpouse ?? 0);
+    const ageCols = (showAgeClient ? 1 : 0) + (showAgeSpouse ? 1 : 0);
+    const earnedCols = (showEarnedClient ? 1 : 0) + (showEarnedSpouse ? 1 : 0);
+    const ssCols = (showSSClient ? 1 : 0) + (showSSSpouse ? 1 : 0);
+    const pensionCols = (showPensionClient ? 1 : 0) + (showPensionSpouse ? 1 : 0);
+    const accountCols =
+      (showQualifiedClient ? 1 : 0) + (showQualifiedSpouse ? 1 : 0) +
+      (showRothClient ? 1 : 0) + (showRothSpouse ? 1 : 0) +
+      (showTaxableClient ? 1 : 0) + (showTaxableSpouse ? 1 : 0) +
+      (showCashClient ? 1 : 0) + (showCashSpouse ? 1 : 0) +
+      (showInsuranceClient ? 1 : 0) + (showInsuranceSpouse ? 1 : 0);
+    const totalCols = ageCols + earnedCols + ssCols + pensionCols + accountCols + 4;
+    return {
+      showAgeClient,
+      showAgeSpouse,
+      showEarnedClient,
+      showEarnedSpouse,
+      showSSClient,
+      showSSSpouse,
+      showPensionClient,
+      showPensionSpouse,
+      showQualifiedClient,
+      showQualifiedSpouse,
+      showRothClient,
+      showRothSpouse,
+      showTaxableClient,
+      showTaxableSpouse,
+      showCashClient,
+      showCashSpouse,
+      showInsuranceClient,
+      showInsuranceSpouse,
+      totalCols,
+    };
+  }, [current.rows, hasSpouse]);
+
+  const totalCols = showByAccount ? detailedColumnVisibility.totalCols : 9;
 
   return (
     <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
@@ -443,34 +511,132 @@ export default function CurrentIncomeSummary() {
             {showByAccount ? (
               <>
                 <tr className="text-left border-b border-gray-600">
-                  <th colSpan={2} className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-age)", color: "var(--col-age)", backgroundColor: "var(--col-age-bg)" }}>Age</th>
-                  <th colSpan={2} className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned income</th>
-                  <th colSpan={2} className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>SS</th>
-                  <th colSpan={2} className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Pension / other</th>
-                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Qualified</th>
-                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Taxable</th>
-                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Roth</th>
-                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Cash</th>
-                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Insurance</th>
+                  {detailedColumnVisibility.showAgeClient && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-age)", color: "var(--col-age)", backgroundColor: "var(--col-age-bg)" }}>Age</th>
+                  )}
+                  {detailedColumnVisibility.showAgeSpouse && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-age)", color: "var(--col-age)", backgroundColor: "var(--col-age-bg)" }}>Age</th>
+                  )}
+                  {(detailedColumnVisibility.showEarnedClient || detailedColumnVisibility.showEarnedSpouse) && (
+                    <>
+                      {detailedColumnVisibility.showEarnedClient && (
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned income</th>
+                      )}
+                      {detailedColumnVisibility.showEarnedSpouse && (
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned income</th>
+                      )}
+                    </>
+                  )}
+                  {(detailedColumnVisibility.showSSClient || detailedColumnVisibility.showSSSpouse) && (
+                    <>
+                      {detailedColumnVisibility.showSSClient && (
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>SS</th>
+                      )}
+                      {detailedColumnVisibility.showSSSpouse && (
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>SS</th>
+                      )}
+                    </>
+                  )}
+                  {(detailedColumnVisibility.showPensionClient || detailedColumnVisibility.showPensionSpouse) && (
+                    <>
+                      {detailedColumnVisibility.showPensionClient && (
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Pension / other</th>
+                      )}
+                      {detailedColumnVisibility.showPensionSpouse && (
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Pension / other</th>
+                      )}
+                    </>
+                  )}
+                  {detailedColumnVisibility.showQualifiedClient && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Qualified</th>
+                  )}
+                  {detailedColumnVisibility.showQualifiedSpouse && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Qualified</th>
+                  )}
+                  {detailedColumnVisibility.showRothClient && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Roth</th>
+                  )}
+                  {detailedColumnVisibility.showRothSpouse && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Roth</th>
+                  )}
+                  {detailedColumnVisibility.showTaxableClient && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Taxable</th>
+                  )}
+                  {detailedColumnVisibility.showTaxableSpouse && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Taxable</th>
+                  )}
+                  {detailedColumnVisibility.showCashClient && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Cash</th>
+                  )}
+                  {detailedColumnVisibility.showCashSpouse && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Cash</th>
+                  )}
+                  {detailedColumnVisibility.showInsuranceClient && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Insurance</th>
+                  )}
+                  {detailedColumnVisibility.showInsuranceSpouse && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Insurance</th>
+                  )}
                   <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-total)", color: "var(--col-total)", backgroundColor: "var(--col-total-bg)" }}>Total</th>
                   <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-target)", color: "var(--col-target)", backgroundColor: "var(--col-target-bg)" }}>Target goal</th>
                   <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed-pct)", color: "var(--col-guaranteed-pct)", backgroundColor: "var(--col-guaranteed-pct-bg)" }}>Guaranteed %</th>
                   <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-shortage)", color: "var(--col-shortage)", backgroundColor: "var(--col-shortage-bg)" }}>Shortage / Surplus</th>
                 </tr>
                 <tr className="text-left border-b border-gray-600 text-xs text-gray-400">
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-age-bg)" }}>{clientLabel}</th>
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-age-bg)" }}>{spouseLabel}</th>
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-earned-bg)" }}>{clientLabel}</th>
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-earned-bg)" }}>{spouseLabel}</th>
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{clientLabel}</th>
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{spouseLabel}</th>
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{clientLabel}</th>
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{spouseLabel}</th>
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }} />
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }} />
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }} />
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }} />
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }} />
+                  {detailedColumnVisibility.showAgeClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-age-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showAgeSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-age-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showEarnedClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-earned-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showEarnedSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-earned-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showSSClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showSSSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showPensionClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showPensionSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showQualifiedClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showQualifiedSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showRothClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showRothSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showTaxableClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showTaxableSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showCashClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showCashSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showInsuranceClient && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{clientLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showInsuranceSpouse && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{spouseLabel}</th>
+                  )}
                   <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-total-bg)" }} />
                   <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-target-bg)" }} />
                   <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)" }} />
@@ -530,19 +696,60 @@ export default function CurrentIncomeSummary() {
                   <tr className="border-b border-gray-700">
                     {showByAccount && d ? (
                       <>
-                        <td className="py-2 pr-4 pl-3 text-white" style={{ backgroundColor: "var(--col-age-bg)" }}>{row.clientAge}</td>
-                        <td className="py-2 pr-4 pl-3 text-white" style={{ backgroundColor: "var(--col-age-bg)" }}>{hasSpouse ? row.spouseAge : "—"}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-earned-bg)" }}>{fmt(d.earnedClient)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-earned-bg)" }}>{fmt(d.earnedSpouse)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.ssClient)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.ssSpouse)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.pensionClient)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.pensionSpouse)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt(d.accountDraws.qualified)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt(d.accountDraws.taxable)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt(d.accountDraws.roth)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt(d.accountDraws.cash)}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt(d.accountDraws.insurance)}</td>
+                        {detailedColumnVisibility.showAgeClient && (
+                          <td className="py-2 pr-4 pl-3 text-white" style={{ backgroundColor: "var(--col-age-bg)" }}>{row.clientAge}</td>
+                        )}
+                        {detailedColumnVisibility.showAgeSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-white" style={{ backgroundColor: "var(--col-age-bg)" }}>{row.spouseAge}</td>
+                        )}
+                        {detailedColumnVisibility.showEarnedClient && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-earned-bg)" }}>{fmt(d.earnedClient)}</td>
+                        )}
+                        {detailedColumnVisibility.showEarnedSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-earned-bg)" }}>{fmt(d.earnedSpouse)}</td>
+                        )}
+                        {detailedColumnVisibility.showSSClient && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.ssClient)}</td>
+                        )}
+                        {detailedColumnVisibility.showSSSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.ssSpouse)}</td>
+                        )}
+                        {detailedColumnVisibility.showPensionClient && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.pensionClient)}</td>
+                        )}
+                        {detailedColumnVisibility.showPensionSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.pensionSpouse)}</td>
+                        )}
+                        {detailedColumnVisibility.showQualifiedClient && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { qualifiedClient?: number }).qualifiedClient ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showQualifiedSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { qualifiedSpouse?: number }).qualifiedSpouse ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showRothClient && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { rothClient?: number }).rothClient ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showRothSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { rothSpouse?: number }).rothSpouse ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showTaxableClient && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { taxableClient?: number }).taxableClient ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showTaxableSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { taxableSpouse?: number }).taxableSpouse ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showCashClient && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { cashClient?: number }).cashClient ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showCashSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { cashSpouse?: number }).cashSpouse ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showInsuranceClient && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { insuranceClient?: number }).insuranceClient ?? 0)}</td>
+                        )}
+                        {detailedColumnVisibility.showInsuranceSpouse && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { insuranceSpouse?: number }).insuranceSpouse ?? 0)}</td>
+                        )}
                         <td className="py-2 pr-4 pl-3 text-white font-medium" style={{ backgroundColor: "var(--col-total-bg)" }}>{Math.round(d.totalDisplay).toLocaleString()}</td>
                         <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-target-bg)" }}>{Math.round(targetGoalDisplay).toLocaleString()}</td>
                         <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)" }}>{Math.round(d.guaranteedPct)}%</td>

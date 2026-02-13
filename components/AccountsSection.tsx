@@ -1,7 +1,7 @@
 "use client";
 
 import { useCalculator } from "@/context/CalculatorContext";
-import type { AccountType } from "@/lib/types";
+import type { AccountType, IncomeOwner } from "@/lib/types";
 
 const ACCOUNT_SECTIONS: { type: AccountType; title: string }[] = [
   { type: "qualified", title: "Qualified" },
@@ -43,7 +43,13 @@ export default function AccountsSection() {
     removeAccount,
     distributionRateAssumptionPct,
     setDistributionRateAssumptionPct,
+    hasSpouse,
+    client,
+    spouse,
   } = useCalculator();
+
+  const clientLabel = client?.name || "Client";
+  const spouseLabel = spouse?.name || "Spouse";
 
   const accountsByType = (type: AccountType) => accounts.filter((a) => a.type === type);
   const canRemove = (acc: { id: string; type: AccountType }) => accountsByType(acc.type).length > 1;
@@ -93,8 +99,27 @@ export default function AccountsSection() {
                 {list.map((acc) => (
                   <div
                     key={acc.id}
-                    className="p-4 rounded-lg bg-gray-800/50 border border-gray-600 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end"
+                    className="p-4 rounded-lg bg-gray-800/50 border border-gray-600 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-4 items-end"
                   >
+                    <Input
+                      label="Account name"
+                      type="text"
+                      value={acc.accountName ?? ""}
+                      onChange={(v) => updateAccount(acc.id, { accountName: v })}
+                    />
+                    {hasSpouse && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Owner</label>
+                        <select
+                          value={acc.owner ?? "client"}
+                          onChange={(e) => updateAccount(acc.id, { owner: e.target.value as IncomeOwner })}
+                          className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="client">{clientLabel}</option>
+                          <option value="spouse">{spouseLabel}</option>
+                        </select>
+                      </div>
+                    )}
                     <Input
                       label="Balance ($)"
                       value={acc.balance || ""}

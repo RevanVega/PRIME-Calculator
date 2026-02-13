@@ -30,7 +30,7 @@ export const STEPS = [
   "Guaranteed income",
   "Accounts",
   "Current income summary",
-  "Annuity option",
+  "Prime",
   "Comparison",
 ] as const;
 export type StepId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -51,7 +51,10 @@ interface CalculatorContextValue extends CalculatorState {
   updateSideIncome: (id: string, u: Partial<SideIncomeEntry>) => void;
   setGuaranteedIncome: (v: GuaranteedIncomeInputs | UpdateFn<GuaranteedIncomeInputs>) => void;
   setAccounts: (v: AccountBucket[] | UpdateFn<AccountBucket[]>) => void;
-  setAnnuityPrime: (v: AnnuityPrimeInputs | null) => void;
+  setAnnuityPrimeOptions: (v: AnnuityPrimeInputs[] | ((prev: AnnuityPrimeInputs[]) => AnnuityPrimeInputs[])) => void;
+  addAnnuityPrimeOption: () => void;
+  removeAnnuityPrimeOption: (id: string) => void;
+  updateAnnuityPrimeOption: (id: string, u: Partial<AnnuityPrimeInputs>) => void;
   addPension: () => void;
   addAnnuity: () => void;
   addRental: () => void;
@@ -96,6 +99,8 @@ export function CalculatorProvider({ children }: { children: React.ReactNode }) 
       id: generateId(),
       type,
       label: labels[type],
+      accountName: "",
+      owner: "client",
       balance: 0,
       contributions: 0,
       growthRatePct: 5,
@@ -145,8 +150,43 @@ export function CalculatorProvider({ children }: { children: React.ReactNode }) 
     setState((s) => ({ ...s, accounts: typeof v === "function" ? v(s.accounts) : v }));
   }, []);
 
-  const setAnnuityPrime = useCallback((v: AnnuityPrimeInputs | null) => {
-    setState((s) => ({ ...s, annuityPrime: v }));
+  const setAnnuityPrimeOptions = useCallback((v: AnnuityPrimeInputs[] | ((prev: AnnuityPrimeInputs[]) => AnnuityPrimeInputs[])) => {
+    setState((s) => ({
+      ...s,
+      annuityPrimeOptions: typeof v === "function" ? v(s.annuityPrimeOptions) : v,
+    }));
+  }, []);
+
+  const addAnnuityPrimeOption = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      annuityPrimeOptions: [
+        ...s.annuityPrimeOptions,
+        {
+          id: generateId(),
+          premiumAmount: 0,
+          referencedAccountType: "qualified",
+          incomeStartAge: 65,
+          payoutAmount: 0,
+          benefitOption: "singleLife",
+          owner: "client",
+        },
+      ],
+    }));
+  }, []);
+
+  const removeAnnuityPrimeOption = useCallback((id: string) => {
+    setState((s) => ({
+      ...s,
+      annuityPrimeOptions: s.annuityPrimeOptions.filter((o) => o.id !== id),
+    }));
+  }, []);
+
+  const updateAnnuityPrimeOption = useCallback((id: string, u: Partial<AnnuityPrimeInputs>) => {
+    setState((s) => ({
+      ...s,
+      annuityPrimeOptions: s.annuityPrimeOptions.map((o) => (o.id === id ? { ...o, ...u } : o)),
+    }));
   }, []);
 
   const addSideIncome = useCallback(() => {
@@ -301,6 +341,8 @@ export function CalculatorProvider({ children }: { children: React.ReactNode }) 
         id: generateId(),
         type,
         label: sameTypeCount === 0 ? labels[type] : `${labels[type]} ${sameTypeCount + 1}`,
+        accountName: "",
+        owner: "client",
         balance: 0,
         contributions: 0,
         growthRatePct: 5,
@@ -330,16 +372,23 @@ export function CalculatorProvider({ children }: { children: React.ReactNode }) 
       cash: "Cash",
       insurance: "Cash value insurance",
     };
+    const defaultTaxRates: Record<AccountBucket["type"], number> = {
+      qualified: 25,
+      roth: 0,
+      taxable: 25,
+      cash: 25,
+      insurance: 0,
+    };
     const types: AccountBucket["type"][] = ["qualified", "roth", "taxable", "cash", "insurance"];
     setState((s) => ({
       ...s,
       hasSpouse: true,
       client: {
-        name: "Ed Arroyo",
+        name: "Ed",
         currentAge: 59,
-        projectedRetirementAge: 65,
+        projectedRetirementAge: 60,
         projectedPlanAge: 90,
-        currentMonthlyIncomeGoal: 8000,
+        currentMonthlyIncomeGoal: 10000,
         inflationForIncomeGoalPct: 2.5,
       },
       spouse: {
@@ -355,22 +404,23 @@ export function CalculatorProvider({ children }: { children: React.ReactNode }) 
         amountDisplayMode: "annual",
         colaPct: 2,
         taxRatePct: 25,
-        client: { currentIncomeAnnual: 0, stopWorkingAge: 65 },
-        spouse: { currentIncomeAnnual: 60000, stopWorkingAge: 63 },
+        client: { currentIncomeAnnual: 50000, stopWorkingAge: 60 },
+        spouse: { currentIncomeAnnual: 100000, stopWorkingAge: 65 },
         sideIncomeEntries: [],
       },
       guaranteedIncome: {
-        socialSecurityClient: { monthlyBenefit: 3250, startAge: 66, colaPct: 2, taxRatePct: 0 },
-        socialSecuritySpouse: { monthlyBenefit: 1500, startAge: 67, colaPct: 2, taxRatePct: 0 },
+        socialSecurityClient: { monthlyBenefit: 3250, startAge: 65, colaPct: 2, taxRatePct: 20 },
+        socialSecuritySpouse: { monthlyBenefit: 1500, startAge: 65, colaPct: 2, taxRatePct: 20 },
         pensions: [
           {
             id: generateId(),
             type: "pension",
-            amount: 1367.58,
+            amount: 3000,
             startAge: 65,
             survivorPct: 50,
-            colaPct: 0,
-            taxRatePct: 0,
+            colaPct: 2,
+            taxRatePct: 25,
+            owner: "client",
           },
         ],
         annuities: [],
@@ -380,19 +430,26 @@ export function CalculatorProvider({ children }: { children: React.ReactNode }) 
         id: generateId(),
         type,
         label: labels[type],
-        balance: type === "qualified" ? 250000 : type === "roth" ? 250000 : type === "taxable" ? 0 : type === "cash" ? 400000 : 100000,
+        accountName: type === "qualified" ? "401k" : "",
+        owner: "client",
+        balance: type === "qualified" ? 90000 : 0,
         contributions: 0,
         growthRatePct: type === "roth" ? 8 : 7,
         distributionRatePct: 4,
-        taxRatePct: type === "roth" || type === "insurance" ? 0 : 25,
+        taxRatePct: defaultTaxRates[type],
       })),
-      annuityPrime: {
-        premiumAmount: 400000,
-        referencedAccountType: "qualified",
-        incomeStartAge: 65,
-        payoutAmount: 2125,
-        carrier: "Sample carrier",
-      },
+      annuityPrimeOptions: [
+        {
+          id: generateId(),
+          premiumAmount: 50000,
+          referencedAccountType: "qualified",
+          incomeStartAge: 60,
+          payoutAmount: 33516,
+          carrier: "Prudential",
+          benefitOption: "joint",
+          owner: "client",
+        },
+      ],
     }));
   }, []);
 
@@ -414,7 +471,10 @@ export function CalculatorProvider({ children }: { children: React.ReactNode }) 
       updateSideIncome,
       setGuaranteedIncome,
       setAccounts,
-      setAnnuityPrime,
+      setAnnuityPrimeOptions,
+      addAnnuityPrimeOption,
+      removeAnnuityPrimeOption,
+      updateAnnuityPrimeOption,
       addPension,
       addAnnuity,
       addRental,
@@ -445,7 +505,10 @@ export function CalculatorProvider({ children }: { children: React.ReactNode }) 
       updateSideIncome,
       setGuaranteedIncome,
       setAccounts,
-      setAnnuityPrime,
+      setAnnuityPrimeOptions,
+      addAnnuityPrimeOption,
+      removeAnnuityPrimeOption,
+      updateAnnuityPrimeOption,
       addPension,
       addAnnuity,
       addRental,

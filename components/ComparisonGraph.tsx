@@ -14,19 +14,10 @@ import {
 } from "recharts";
 
 export default function ComparisonGraph() {
-  const { income, client, annuityPrime, setAnnuityPrime } = useCalculator();
+  const { income, client, annuityPrimeOptions, updateAnnuityPrimeOption } = useCalculator();
   const { current, prime, hasPrimePath } = useProjection();
   const isMonthly = income.amountDisplayMode === "monthly";
-
-  const primePreview = annuityPrime ?? {
-    premiumAmount: 0,
-    referencedAccountType: "qualified" as const,
-    incomeStartAge: 65,
-    payoutAmount: 0,
-  };
-  const updatePrime = (u: Partial<typeof primePreview>) => {
-    setAnnuityPrime({ ...primePreview, ...u });
-  };
+  const firstOption = annuityPrimeOptions?.[0];
 
   const chartData = current.rows.map((row, i) => {
     const valueCurrent = isMonthly ? row.monthlyTotal : row.annualTotal;
@@ -36,12 +27,20 @@ export default function ComparisonGraph() {
         : prime.rows[i].annualTotal
       : valueCurrent;
     const target = isMonthly ? row.targetGoalAnnual / 12 : row.targetGoalAnnual;
+    const guaranteedCurrent = isMonthly ? row.guaranteedDollars / 12 : row.guaranteedDollars;
+    const guaranteedPrime = prime.rows[i]
+      ? isMonthly
+        ? prime.rows[i].guaranteedDollars / 12
+        : prime.rows[i].guaranteedDollars
+      : guaranteedCurrent;
     return {
       age: row.clientAge,
       current: Math.round(valueCurrent),
       prime: Math.round(valuePrime),
       target: client.currentMonthlyIncomeGoal > 0 ? Math.round(target) : undefined,
       guaranteedPct: Math.round(row.guaranteedPct),
+      guaranteedCurrent: Math.round(guaranteedCurrent),
+      guaranteedPrime: Math.round(guaranteedPrime),
     };
   });
 
@@ -54,38 +53,40 @@ export default function ComparisonGraph() {
         Display: {income.amountDisplayMode}. Toggle annuity amounts below to see how the PRIME path changes.
       </p>
 
-      <div className="mb-6 p-4 rounded-lg bg-gray-800/50 border border-gray-600">
-        <h3 className="text-sm font-medium text-gray-300 mb-3">Annuity amounts (live)</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Premium ($)</label>
-            <input
-              type="number"
-              value={primePreview.premiumAmount || ""}
-              onChange={(e) => updatePrime({ premiumAmount: Number(e.target.value) || 0 })}
-              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Payout ($/mo)</label>
-            <input
-              type="number"
-              value={primePreview.payoutAmount || ""}
-              onChange={(e) => updatePrime({ payoutAmount: Number(e.target.value) || 0 })}
-              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Income start age</label>
-            <input
-              type="number"
-              value={primePreview.incomeStartAge || ""}
-              onChange={(e) => updatePrime({ incomeStartAge: Number(e.target.value) || 0 })}
-              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-            />
+      {firstOption && (
+        <div className="mb-6 p-4 rounded-lg bg-gray-800/50 border border-gray-600">
+          <h3 className="text-sm font-medium text-gray-300 mb-3">First PRIME option (live)</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Premium ($)</label>
+              <input
+                type="number"
+                value={firstOption.premiumAmount || ""}
+                onChange={(e) => updateAnnuityPrimeOption(firstOption.id, { premiumAmount: Number(e.target.value) || 0 })}
+                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Payout ($/yr, no COLA)</label>
+              <input
+                type="number"
+                value={firstOption.payoutAmount || ""}
+                onChange={(e) => updateAnnuityPrimeOption(firstOption.id, { payoutAmount: Number(e.target.value) || 0 })}
+                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Income start age</label>
+              <input
+                type="number"
+                value={firstOption.incomeStartAge || ""}
+                onChange={(e) => updateAnnuityPrimeOption(firstOption.id, { incomeStartAge: Number(e.target.value) || 0 })}
+                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="h-80 w-full min-h-[300px]">
         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
@@ -145,6 +146,28 @@ export default function ComparisonGraph() {
                 stroke="#F59E0B"
                 strokeWidth={1.5}
                 dot={false}
+              />
+            )}
+            <Line
+              type="monotone"
+              dataKey="guaranteedCurrent"
+              name="Current guaranteed"
+              stroke="#14B8A6"
+              strokeWidth={1.5}
+              dot={false}
+              strokeDasharray="2 2"
+              strokeOpacity={0.9}
+            />
+            {hasPrimePath && (
+              <Line
+                type="monotone"
+                dataKey="guaranteedPrime"
+                name="PRIME guaranteed"
+                stroke="#34D399"
+                strokeWidth={1.5}
+                dot={false}
+                strokeDasharray="2 2"
+                strokeOpacity={0.9}
               />
             )}
           </LineChart>

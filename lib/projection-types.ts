@@ -28,7 +28,23 @@ export interface ProjectionRow {
   /** PRIME: guaranteed from converted premium (flat annual) */
   guaranteedFromPrime: number;
   /** Draws from account buckets by type (annual) */
-  accountDraws: { qualified: number; roth: number; taxable: number; cash: number; insurance: number };
+  accountDraws: {
+    qualified: number;
+    roth: number;
+    taxable: number;
+    cash: number;
+    insurance: number;
+    qualifiedClient: number;
+    qualifiedSpouse: number;
+    rothClient: number;
+    rothSpouse: number;
+    taxableClient: number;
+    taxableSpouse: number;
+    cashClient: number;
+    cashSpouse: number;
+    insuranceClient: number;
+    insuranceSpouse: number;
+  };
   /** Total annual income */
   annualTotal: number;
   /** Monthly total */

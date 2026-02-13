@@ -15,10 +15,10 @@ export function useProjection(): {
   return useMemo(() => {
     const current = runProjection(state, false);
     const prime = runProjection(state, true);
-    const hasPrimePath =
-      !!state.annuityPrime &&
-      state.annuityPrime.premiumAmount > 0 &&
-      state.annuityPrime.payoutAmount > 0;
+    const opts = state.annuityPrimeOptions ?? [];
+    const hasPrimePath = opts.some(
+      (o) => o.premiumAmount > 0 && o.payoutAmount > 0
+    );
 
     return { current, prime, hasPrimePath };
   }, [
@@ -40,9 +40,6 @@ export function useProjection(): {
     JSON.stringify(state.income.sideIncomeEntries),
     JSON.stringify(state.guaranteedIncome),
     JSON.stringify(state.accounts),
-    state.annuityPrime?.premiumAmount,
-    state.annuityPrime?.referencedAccountType,
-    state.annuityPrime?.incomeStartAge,
-    state.annuityPrime?.payoutAmount,
+    JSON.stringify(state.annuityPrimeOptions),
   ]);
 }

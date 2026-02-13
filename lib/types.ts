@@ -79,6 +79,10 @@ export interface AccountBucket {
   id: string;
   type: AccountType;
   label: string;
+  /** User-facing name (e.g. "Fidelity", "Current 401k") */
+  accountName?: string;
+  /** Who owns this account; default client */
+  owner?: IncomeOwner;
   balance: number;
   contributions: number; // annual contribution until retirement
   growthRatePct: number;
@@ -86,12 +90,19 @@ export interface AccountBucket {
   taxRatePct: number;
 }
 
+export type PrimeBenefitOption = "visit" | "singleLife" | "joint";
+export type PrimeOwnerOption = "client" | "spouse" | "joint";
+
 export interface AnnuityPrimeInputs {
+  id: string;
   premiumAmount: number;
   referencedAccountType: AccountType;
   incomeStartAge: number;
-  payoutAmount: number; // flat, no COLA
+  /** Annual payout amount (no COLA) */
+  payoutAmount: number;
   carrier?: string;
+  benefitOption: PrimeBenefitOption;
+  owner: PrimeOwnerOption;
 }
 
 export interface CalculatorState {
@@ -107,7 +118,8 @@ export interface CalculatorState {
   income: IncomeInputs;
   guaranteedIncome: GuaranteedIncomeInputs;
   accounts: AccountBucket[];
-  annuityPrime: AnnuityPrimeInputs | null;
+  /** PRIME efficiency options (multiple allowed) */
+  annuityPrimeOptions: AnnuityPrimeInputs[];
 }
 
 export const defaultClientInfo: ClientInfo = {
@@ -161,5 +173,5 @@ export const defaultCalculatorState: CalculatorState = {
   income: { ...defaultIncomeInputs },
   guaranteedIncome: { ...defaultGuaranteedIncome },
   accounts: [],
-  annuityPrime: null,
+  annuityPrimeOptions: [],
 };
