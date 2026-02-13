@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-black: #000000;
+  --bg-card: #111827;
+  --bg-surface: #1F2937;
+  --border: #374151;
+  --text: #F9FAFB;
+  --text-muted: #9CA3AF;
+  --primary: #3B82F6;
+  --primary-hover: #60A5FA;
+  /* Baseline column categories */
+  --col-age: #3B82F6;
+  --col-earned: #10B981;
+  --col-guaranteed: #14B8A6;
+  --col-accounts: #6366F1;
+  --col-total: #10B981;
+  --col-target: #F59E0B;
+  --col-guaranteed-pct: #14B8A6;
+  --col-shortage: #EF4444;
+  --col-age-bg: rgba(59, 130, 246, 0.08);
+  --col-earned-bg: rgba(16, 185, 129, 0.08);
+  --col-guaranteed-bg: rgba(20, 184, 166, 0.08);
+  --col-accounts-bg: rgba(99, 102, 241, 0.08);
+  --col-total-bg: rgba(16, 185, 129, 0.12);
+  --col-target-bg: rgba(245, 158, 11, 0.08);
+  --col-guaranteed-pct-bg: rgba(20, 184, 166, 0.08);
+  --col-shortage-bg: rgba(239, 68, 68, 0.08);
+}
+
+body {
+  background: var(--bg-black);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+}
