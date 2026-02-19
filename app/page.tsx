@@ -33,6 +33,8 @@ function StepContent({ step }: { step: StepId }) {
     case 6:
       return <AnnuityPrimeSection />;
     case 7:
+      return <CurrentIncomeSummary variant="prime" />;
+    case 8:
       return <ComparisonGraph />;
     default:
       return null;
@@ -42,7 +44,7 @@ function StepContent({ step }: { step: StepId }) {
 function StepNav({ currentStep }: { currentStep: StepId }) {
   const { setCurrentStep } = useCalculator();
   const isFirst = currentStep === 1;
-  const isLast = currentStep === 7;
+  const isLast = currentStep === 8;
   const prev: StepId = (currentStep - 1) as StepId;
   const next: StepId = (currentStep + 1) as StepId;
 
@@ -73,7 +75,7 @@ export default function PrimeCalculatorPage() {
 
   return (
     <main className="min-h-screen bg-black text-gray-100">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8">
         <Header />
         <Stepper />
         <StepContent step={currentStep} />

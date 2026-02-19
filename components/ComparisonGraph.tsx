@@ -3,8 +3,9 @@
 import { useCalculator } from "@/context/CalculatorContext";
 import { useProjection } from "@/hooks/useProjection";
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -45,6 +46,63 @@ export default function ComparisonGraph() {
   });
 
   const hasTarget = chartData.some((d) => d.target != null && d.target > 0);
+
+  // First year of retirement = row where client age equals retirement age
+  const retirementRowIndex = current.rows.findIndex((r) => r.clientAge === current.retirementAge);
+  const retirementRow =
+    retirementRowIndex >= 0 ? current.rows[retirementRowIndex] : current.rows[0];
+  const primeRetirementRow =
+    hasPrimePath && retirementRowIndex >= 0 && prime.rows[retirementRowIndex]
+      ? prime.rows[retirementRowIndex]
+      : prime.rows[0];
+
+  // Rows at age 70 and 80
+  const rowAt70 = current.rows.find((r) => r.clientAge === 70) ?? retirementRow;
+  const rowAt80 = current.rows.find((r) => r.clientAge === 80) ?? retirementRow;
+  const primeRowAt70 =
+    hasPrimePath && prime.rows.length > 0 ? prime.rows.find((r) => r.clientAge === 70) ?? primeRetirementRow : null;
+  const primeRowAt80 =
+    hasPrimePath && prime.rows.length > 0 ? prime.rows.find((r) => r.clientAge === 80) ?? primeRetirementRow : null;
+
+  const currentYear = new Date().getFullYear();
+  const retirementYear =
+    client?.currentAge != null && current.retirementAge != null
+      ? currentYear + (current.retirementAge - client.currentAge)
+      : currentYear;
+
+  const renderAgeBox = (
+    label: string,
+    row: { annualTotal: number; monthlyTotal: number; guaranteedPct: number; guaranteedDollars: number },
+    theme: "current" | "prime"
+  ) => {
+    const isCurrent = theme === "current";
+    const borderColor = isCurrent ? "border-l-blue-500" : "border-l-emerald-500";
+    const amountColor = isCurrent ? "text-blue-400" : "text-emerald-400";
+    return (
+      <div
+        className={`p-2.5 rounded-lg bg-gray-800/50 border border-gray-600 border-l-4 ${borderColor} min-h-[5.5rem] flex flex-col justify-between`}
+      >
+        <div className="text-gray-400 text-xs">{label}</div>
+        <div className={`font-medium mt-0.5 ${amountColor}`}>
+          {isMonthly
+            ? `$${Math.round(row.monthlyTotal).toLocaleString()}/mo`
+            : `$${Math.round(row.annualTotal).toLocaleString()}/yr`}
+        </div>
+        <div className="text-xs text-gray-500 mt-1">
+          {Math.round(row.guaranteedPct)}% guaranteed
+          {row.guaranteedDollars > 0 ? (
+            <span className="block text-gray-400 mt-0.5">
+              {isMonthly
+                ? `$${Math.round(row.guaranteedDollars / 12).toLocaleString()}/mo`
+                : `$${Math.round(row.guaranteedDollars).toLocaleString()}/yr`}
+            </span>
+          ) : (
+            <span className="block mt-0.5 min-h-[1.25rem]" aria-hidden />
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
@@ -90,10 +148,20 @@ export default function ComparisonGraph() {
 
       <div className="h-80 w-full min-h-[300px]">
         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
-          <LineChart
+          <ComposedChart
             data={chartData}
             margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
           >
+            <defs>
+              <linearGradient id="guaranteedCurrentFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#0D9488" stopOpacity={0.85} />
+                <stop offset="100%" stopColor="#0D9488" stopOpacity={0.6} />
+              </linearGradient>
+              <linearGradient id="guaranteedPrimeFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#059669" stopOpacity={0.85} />
+                <stop offset="100%" stopColor="#059669" stopOpacity={0.6} />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
             <XAxis
               dataKey="age"
@@ -119,6 +187,27 @@ export default function ComparisonGraph() {
               wrapperStyle={{ fontSize: 12 }}
               formatter={(value) => <span className="text-gray-300">{value}</span>}
             />
+            {/* Guaranteed areas (shadow/fill) — drawn first so lines sit on top */}
+            <Area
+              type="monotone"
+              dataKey="guaranteedCurrent"
+              name="Current guaranteed (area)"
+              fill="url(#guaranteedCurrentFill)"
+              stroke="none"
+              isAnimationActive={false}
+              hide
+            />
+            {hasPrimePath && (
+              <Area
+                type="monotone"
+                dataKey="guaranteedPrime"
+                name="PRIME guaranteed (area)"
+                fill="url(#guaranteedPrimeFill)"
+                stroke="none"
+                isAnimationActive={false}
+                hide
+              />
+            )}
             <Line
               type="monotone"
               dataKey="current"
@@ -152,58 +241,50 @@ export default function ComparisonGraph() {
               type="monotone"
               dataKey="guaranteedCurrent"
               name="Current guaranteed"
-              stroke="#14B8A6"
-              strokeWidth={1.5}
+              stroke="#0D9488"
+              strokeWidth={2}
               dot={false}
-              strokeDasharray="2 2"
-              strokeOpacity={0.9}
+              strokeDasharray="3 3"
             />
             {hasPrimePath && (
               <Line
                 type="monotone"
                 dataKey="guaranteedPrime"
                 name="PRIME guaranteed"
-                stroke="#34D399"
-                strokeWidth={1.5}
+                stroke="#059669"
+                strokeWidth={2}
                 dot={false}
-                strokeDasharray="2 2"
-                strokeOpacity={0.9}
+                strokeDasharray="3 3"
               />
             )}
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 
       {current.rows.length > 0 && (
-        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-600">
-            <div className="text-gray-400">Current (first year)</div>
-            <div className="text-white font-medium">
-              {isMonthly
-                ? `$${Math.round(current.rows[0].monthlyTotal).toLocaleString()}/mo`
-                : `$${Math.round(current.rows[0].annualTotal).toLocaleString()}/yr`}
-            </div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm max-w-3xl">
+          <div className="space-y-3">
+            <div className="text-blue-400 font-medium mb-1">Current</div>
+            {renderAgeBox(
+              `First year of retirement (Year ${retirementYear})`,
+              retirementRow,
+              "current"
+            )}
+            {renderAgeBox("Age 70", rowAt70, "current")}
+            {renderAgeBox("Age 80", rowAt80, "current")}
           </div>
           {hasPrimePath && prime.rows.length > 0 && (
-            <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-600">
-              <div className="text-gray-400">PRIME (first year)</div>
-              <div className="text-white font-medium">
-                {isMonthly
-                  ? `$${Math.round(prime.rows[0].monthlyTotal).toLocaleString()}/mo`
-                  : `$${Math.round(prime.rows[0].annualTotal).toLocaleString()}/yr`}
-              </div>
+            <div className="space-y-3">
+              <div className="text-emerald-400 font-medium mb-1">PRIME</div>
+              {renderAgeBox(
+                `First year of retirement (Year ${retirementYear})`,
+                primeRetirementRow,
+                "prime"
+              )}
+              {primeRowAt70 && renderAgeBox("Age 70", primeRowAt70, "prime")}
+              {primeRowAt80 && renderAgeBox("Age 80", primeRowAt80, "prime")}
             </div>
           )}
-          <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-600">
-            <div className="text-gray-400">Guaranteed % (first year)</div>
-            <div className="text-white font-medium">{Math.round(current.rows[0].guaranteedPct)}%</div>
-          </div>
-          <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-600">
-            <div className="text-gray-400">FV at retirement</div>
-            <div className="text-white font-medium">
-              ${(current.futureValuesAtRetirement.qualified + current.futureValuesAtRetirement.roth + current.futureValuesAtRetirement.taxable + current.futureValuesAtRetirement.cash + current.futureValuesAtRetirement.insurance).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </div>
-          </div>
         </div>
       )}
     </section>

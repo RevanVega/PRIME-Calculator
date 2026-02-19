@@ -26,7 +26,9 @@ function applyTax(
 } {
   const earned = row.earnedIncome * (1 - taxRates.earnedPct / 100);
   const ss = row.socialSecurity * (1 - taxRates.ssPct / 100);
-  const pensionOther = (row.pension + row.otherAnnuities + row.rental) * (1 - taxRates.pensionOtherPct / 100);
+  const pensionOther =
+    (row.pension + row.otherAnnuities + row.rental + (row.guaranteedFromPrime ?? 0)) *
+    (1 - taxRates.pensionOtherPct / 100);
   const draws =
     row.accountDraws.qualified +
     row.accountDraws.roth +
@@ -49,10 +51,12 @@ function applyTax(
   };
 }
 
-/** Step 5: Current path income summary (no PRIME) */
+/** Step 5: Current path income summary; Step 7: PRIME path (same table with annuity) */
 type ShortageDisplayMode = "dollar" | "percent";
 
-export default function CurrentIncomeSummary() {
+type IncomeSummaryVariant = "current" | "prime";
+
+export default function CurrentIncomeSummary({ variant = "current" }: { variant?: IncomeSummaryVariant }) {
   const {
     income,
     setIncome,
@@ -64,13 +68,14 @@ export default function CurrentIncomeSummary() {
     spouse,
     hasSpouse,
   } = useCalculator();
-  const { current } = useProjection();
+  const { current, prime, hasPrimePath } = useProjection();
+  const projection = variant === "prime" && hasPrimePath ? prime : current;
   const [showByAccount, setShowByAccount] = useState(false);
   const [showPostTax, setShowPostTax] = useState(false);
   const [shortageDisplayMode, setShortageDisplayMode] = useState<ShortageDisplayMode>("dollar");
 
   const isMonthly = income.amountDisplayMode === "monthly";
-  const retirementAge = current.retirementAge;
+  const retirementAge = projection.retirementAge;
 
   const taxRates = useMemo(() => {
     const ssClient = guaranteedIncome.socialSecurityClient.taxRatePct ?? 0;
@@ -97,10 +102,10 @@ export default function CurrentIncomeSummary() {
     accountsTaxRatePct,
   ]);
 
-  const firstRetirementRow = current.rows.find((r) => r.clientAge >= retirementAge);
-  const firstYear = current.rows[0];
-  const lastYear = current.rows[current.rows.length - 1];
-  const fv = current.futureValuesAtRetirement;
+  const firstRetirementRow = projection.rows.find((r) => r.clientAge >= retirementAge);
+  const firstYear = projection.rows[0];
+  const lastYear = projection.rows[projection.rows.length - 1];
+  const fv = projection.futureValuesAtRetirement;
   const totalFv = fv.qualified + fv.roth + fv.taxable + fv.cash + fv.insurance;
 
   const accountsCurrentByType = useMemo(
@@ -163,10 +168,11 @@ export default function CurrentIncomeSummary() {
       row.accountDraws.taxable +
       row.accountDraws.cash +
       row.accountDraws.insurance;
+    const primeAnnuity = row.guaranteedFromPrime ?? 0;
     return {
       earnedIncome: row.earnedIncome,
       socialSecurity: row.socialSecurity,
-      pensionOther: row.pension + row.otherAnnuities + row.rental,
+      pensionOther: row.pension + row.otherAnnuities + row.rental + primeAnnuity,
       combinedDraws,
       totalDisplay: isMonthly ? row.monthlyTotal : row.annualTotal,
       guaranteedPct: row.guaranteedPct,
@@ -182,7 +188,8 @@ export default function CurrentIncomeSummary() {
       const earnedSpouse = taxMul(row.earnedIncomeSpouse, taxRates.earnedPct);
       const ssClient = taxMul(row.socialSecurityClient, taxRates.ssPct);
       const ssSpouse = taxMul(row.socialSecuritySpouse, taxRates.ssPct);
-      const pensionClient = taxMul(row.pensionOtherRentalClient, taxRates.pensionOtherPct);
+      const primeAnnuity = row.guaranteedFromPrime ?? 0;
+      const pensionClient = taxMul(row.pensionOtherRentalClient + (isPrime ? primeAnnuity : 0), taxRates.pensionOtherPct);
       const pensionSpouse = taxMul(row.pensionOtherRentalSpouse, taxRates.pensionOtherPct);
       const draws = {
         qualified: ad.qualified * acctMul,
@@ -218,12 +225,13 @@ export default function CurrentIncomeSummary() {
         guaranteedPct,
       };
     }
+    const primeAnnuity = row.guaranteedFromPrime ?? 0;
     return {
       earnedClient: row.earnedIncomeClient,
       earnedSpouse: row.earnedIncomeSpouse,
       ssClient: row.socialSecurityClient,
       ssSpouse: row.socialSecuritySpouse,
-      pensionClient: row.pensionOtherRentalClient,
+      pensionClient: row.pensionOtherRentalClient + (isPrime ? primeAnnuity : 0),
       pensionSpouse: row.pensionOtherRentalSpouse,
       accountDraws: ad,
       totalDisplay: isMonthly ? row.monthlyTotal : row.annualTotal,
@@ -231,11 +239,17 @@ export default function CurrentIncomeSummary() {
     };
   };
 
-  if (current.rows.length === 0) {
+  if (projection.rows.length === 0) {
     return (
       <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
-        <h2 className="text-lg font-semibold text-white mb-4">Current income summary</h2>
-        <p className="text-gray-400">Complete steps 1–4 to see your projected income summary.</p>
+        <h2 className="text-lg font-semibold text-white mb-4">
+          {variant === "prime" ? "PRIME income summary" : "Current income summary"}
+        </h2>
+        <p className="text-gray-400">
+          {variant === "prime"
+            ? "Add a PRIME option in the Prime step to see your PRIME path summary."
+            : "Complete steps 1–4 to see your projected income summary."}
+        </p>
       </section>
     );
   }
@@ -244,7 +258,7 @@ export default function CurrentIncomeSummary() {
   const spouseLabel = spouse.name || "Spouse";
 
   const detailedColumnVisibility = useMemo(() => {
-    const rows = current.rows;
+    const rows = projection.rows;
     const some = (fn: (r: ProjectionRow) => number) => rows.some((r) => fn(r) !== 0);
     const ad = (r: ProjectionRow) => r.accountDraws as ProjectionRow["accountDraws"];
     const showAgeClient = true;
@@ -297,13 +311,17 @@ export default function CurrentIncomeSummary() {
       showInsuranceSpouse,
       totalCols,
     };
-  }, [current.rows, hasSpouse]);
+  }, [projection.rows, hasSpouse]);
 
   const totalCols = showByAccount ? detailedColumnVisibility.totalCols : 9;
 
+  const isPrime = variant === "prime";
+
   return (
     <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
-      <h2 className="text-lg font-semibold text-white mb-2">Current income summary</h2>
+      <h2 className="text-lg font-semibold text-white mb-2">
+        {isPrime ? "PRIME income summary" : "Current income summary"}
+      </h2>
       {(client.name || (hasSpouse && spouse.name)) && (
         <p className="text-xs text-gray-400 mb-1">
           {client.name && <span>Client: {client.name}</span>}
@@ -313,7 +331,9 @@ export default function CurrentIncomeSummary() {
         </p>
       )}
       <p className="text-sm text-gray-400 mb-4">
-        Projected income from your current path (no annuity conversion).
+        {isPrime
+          ? "Projected income including your PRIME annuity option(s)."
+          : "Projected income from your current path (no annuity conversion)."}
       </p>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -663,7 +683,7 @@ export default function CurrentIncomeSummary() {
             )}
           </thead>
           <tbody>
-            {current.rows.map((row) => {
+            {projection.rows.map((row) => {
               const isFirstRetirementYear = row.clientAge === retirementAge;
               const v = getRowValues(row);
               const targetPreTax = row.targetGoalAnnual;

@@ -8,13 +8,13 @@ export default function Stepper() {
 
   return (
     <nav className="mb-8" aria-label="Progress">
-      <ol className="flex flex-nowrap gap-2 overflow-x-auto min-w-0">
+      <ol className="flex flex-wrap gap-x-2 gap-y-1">
         {STEPS.map((label, i) => {
           const step = (i + 1) as StepId;
           const isActive = currentStep === step;
           const isPast = currentStep > step;
           return (
-            <li key={step} className="flex items-center gap-2 flex-shrink-0">
+            <li key={step} className="flex items-center gap-2">
               {i > 0 && <span className="text-gray-600">/</span>}
               <button
                 type="button"

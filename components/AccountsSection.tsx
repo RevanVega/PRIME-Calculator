@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useCalculator } from "@/context/CalculatorContext";
 import type { AccountType, IncomeOwner } from "@/lib/types";
 
@@ -11,25 +12,88 @@ const ACCOUNT_SECTIONS: { type: AccountType; title: string }[] = [
   { type: "insurance", title: "Cash value insurance" },
 ];
 
+function formatPercentDisplay(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "";
+  const r = Math.round(Number(n) * 100) / 100;
+  if (r === 0) return "0";
+  if (r % 1 === 0) return String(r);
+  return r.toFixed(2).replace(/\.?0+$/, ""); // e.g. 7.5 not 7.50
+}
+
+function parsePercentValue(v: string): number {
+  const cleaned = v.replace(/,/g, ".").trim();
+  if (cleaned === "" || cleaned === ".") return 0;
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? Math.round(num * 100) / 100 : 0;
+}
+
+/** Percentage input that keeps a draft while typing so decimals (e.g. 7.5, 4.25) can be entered */
+function PercentInput({
+  label,
+  value,
+  onValueChange,
+  className = "",
+}: {
+  label: string;
+  value: number;
+  onValueChange: (n: number) => void;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const display = draft !== null ? draft : formatPercentDisplay(value);
+
+  const handleFocus = () => setDraft(formatPercentDisplay(value));
+  const handleBlur = () => {
+    const n = parsePercentValue(display);
+    onValueChange(n);
+    setDraft(null);
+  };
+  // Allow digits, one optional decimal/comma, and digits after (e.g. 7, 7., 7.5, 7,5)
+  const handleChange = (v: string) => {
+    if (v === "" || /^\d*[.,]?\d*$/.test(v)) setDraft(v);
+  };
+
+  return (
+    <div className={className}>
+      <label className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={display}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-right text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[130px] sm:min-w-[150px]"
+      />
+    </div>
+  );
+}
+
 function Input({
   label,
   value,
   onChange,
-  type = "number",
+  type = "text",
+  numeric = false,
 }: {
   label: string;
   value: string | number;
   onChange: (v: string) => void;
   type?: "text" | "number";
+  numeric?: boolean;
 }) {
+  const inputType = numeric ? "text" : type;
+  const numericClasses = numeric ? " text-right min-w-[130px] sm:min-w-[150px]" : "";
+
   return (
     <div>
       <label className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
       <input
-        type={type}
+        type={inputType}
+        inputMode={numeric ? "decimal" : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        className={`w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent${numericClasses}`}
       />
     </div>
   );
@@ -54,6 +118,18 @@ export default function AccountsSection() {
   const accountsByType = (type: AccountType) => accounts.filter((a) => a.type === type);
   const canRemove = (acc: { id: string; type: AccountType }) => accountsByType(acc.type).length > 1;
 
+  const formatNumber = (n: number | null | undefined) => {
+    if (n === 0) return "0";
+    if (n == null || Number.isNaN(n)) return "";
+    return n.toLocaleString("en-US");
+  };
+
+  const parseNumber = (v: string) => {
+    const cleaned = v.replace(/,/g, "");
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : 0;
+  };
+
   return (
     <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
       <h2 className="text-lg font-semibold text-white mb-1">Accounts</h2>
@@ -63,16 +139,12 @@ export default function AccountsSection() {
 
       <div className="mb-6 max-w-[200px]">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Default distribution rate (%)</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={distributionRateAssumptionPct ?? ""}
-              onChange={(e) => setDistributionRateAssumptionPct(Number(e.target.value) || 0)}
-              className="w-full max-w-[100px] bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="text-gray-400">%</span>
-          </div>
+          <PercentInput
+            label="Default distribution rate (%)"
+            value={distributionRateAssumptionPct ?? 0}
+            onValueChange={setDistributionRateAssumptionPct}
+            className="max-w-[140px]"
+          />
           <p className="text-xs text-gray-500 mt-1">Used when adding new accounts.</p>
         </div>
       </div>
@@ -99,52 +171,69 @@ export default function AccountsSection() {
                 {list.map((acc) => (
                   <div
                     key={acc.id}
-                    className="p-4 rounded-lg bg-gray-800/50 border border-gray-600 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-4 items-end"
+                    className="p-4 rounded-lg bg-gray-800/50 border border-gray-600 space-y-4"
                   >
-                    <Input
-                      label="Account name"
-                      type="text"
-                      value={acc.accountName ?? ""}
-                      onChange={(v) => updateAccount(acc.id, { accountName: v })}
-                    />
-                    {hasSpouse && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Owner</label>
-                        <select
-                          value={acc.owner ?? "client"}
-                          onChange={(e) => updateAccount(acc.id, { owner: e.target.value as IncomeOwner })}
-                          className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="client">{clientLabel}</option>
-                          <option value="spouse">{spouseLabel}</option>
-                        </select>
+                    {/* Top row: name, owner, balance, contributions */}
+                    <div
+                      className={`grid grid-cols-1 ${
+                        hasSpouse ? "md:grid-cols-5" : "md:grid-cols-3"
+                      } gap-4 items-end`}
+                    >
+                      <div className={hasSpouse ? "md:col-span-2" : ""}>
+                        <Input
+                          label="Account name"
+                          type="text"
+                          value={acc.accountName ?? ""}
+                          onChange={(v) => updateAccount(acc.id, { accountName: v })}
+                        />
                       </div>
-                    )}
-                    <Input
-                      label="Balance ($)"
-                      value={acc.balance || ""}
-                      onChange={(v) => updateAccount(acc.id, { balance: Number(v) || 0 })}
-                    />
-                    <Input
-                      label="Contributions ($/yr)"
-                      value={acc.contributions || ""}
-                      onChange={(v) => updateAccount(acc.id, { contributions: Number(v) || 0 })}
-                    />
-                    <Input
-                      label="Growth rate (%)"
-                      value={acc.growthRatePct ?? ""}
-                      onChange={(v) => updateAccount(acc.id, { growthRatePct: Number(v) || 0 })}
-                    />
-                    <Input
-                      label="Distribution rate (%)"
-                      value={acc.distributionRatePct ?? ""}
-                      onChange={(v) => updateAccount(acc.id, { distributionRatePct: Number(v) || 0 })}
-                    />
-                    <Input
-                      label="Tax rate (%)"
-                      value={acc.taxRatePct ?? ""}
-                      onChange={(v) => updateAccount(acc.id, { taxRatePct: Number(v) || 0 })}
-                    />
+                      {hasSpouse && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-1">Owner</label>
+                          <select
+                            value={acc.owner ?? "client"}
+                            onChange={(e) => updateAccount(acc.id, { owner: e.target.value as IncomeOwner })}
+                            className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="client">{clientLabel}</option>
+                            <option value="spouse">{spouseLabel}</option>
+                          </select>
+                        </div>
+                      )}
+                      <Input
+                        label="Balance ($)"
+                        value={formatNumber(acc.balance)}
+                        onChange={(v) => updateAccount(acc.id, { balance: parseNumber(v) })}
+                        numeric
+                      />
+                      <Input
+                        label="Contributions ($/yr)"
+                        value={formatNumber(acc.contributions)}
+                        onChange={(v) => updateAccount(acc.id, { contributions: parseNumber(v) })}
+                        numeric
+                      />
+                    </div>
+
+                    {/* Second row: tax rate, growth, distribution */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                      <div className="md:max-w-[140px]">
+                        <PercentInput
+                          label="Tax rate (%)"
+                          value={acc.taxRatePct ?? 0}
+                          onValueChange={(n) => updateAccount(acc.id, { taxRatePct: n })}
+                        />
+                      </div>
+                      <PercentInput
+                        label="Growth rate (%)"
+                        value={acc.growthRatePct ?? 0}
+                        onValueChange={(n) => updateAccount(acc.id, { growthRatePct: n })}
+                      />
+                      <PercentInput
+                        label="Distribution rate (%)"
+                        value={acc.distributionRatePct ?? 0}
+                        onValueChange={(n) => updateAccount(acc.id, { distributionRatePct: n })}
+                      />
+                    </div>
                     <div className="flex items-end gap-2 flex-wrap">
                       {canRemove(acc) && (
                         <button
