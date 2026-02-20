@@ -154,12 +154,12 @@ export default function ComparisonGraph() {
           >
             <defs>
               <linearGradient id="guaranteedCurrentFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#0D9488" stopOpacity={0.85} />
-                <stop offset="100%" stopColor="#0D9488" stopOpacity={0.6} />
+                <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.85} />
+                <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.6} />
               </linearGradient>
               <linearGradient id="guaranteedPrimeFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#059669" stopOpacity={0.85} />
-                <stop offset="100%" stopColor="#059669" stopOpacity={0.6} />
+                <stop offset="0%" stopColor="#10B981" stopOpacity={0.85} />
+                <stop offset="100%" stopColor="#10B981" stopOpacity={0.6} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -224,7 +224,6 @@ export default function ComparisonGraph() {
                 stroke="#10B981"
                 strokeWidth={2}
                 dot={false}
-                strokeDasharray="4 4"
               />
             )}
             {hasTarget && (
@@ -240,21 +239,21 @@ export default function ComparisonGraph() {
             <Line
               type="monotone"
               dataKey="guaranteedCurrent"
-              name="Current guaranteed"
-              stroke="#0D9488"
+              name="Guaranteed income (primary path)"
+              stroke="#3B82F6"
               strokeWidth={2}
               dot={false}
-              strokeDasharray="3 3"
+              strokeDasharray="4 4"
             />
             {hasPrimePath && (
               <Line
                 type="monotone"
                 dataKey="guaranteedPrime"
-                name="PRIME guaranteed"
-                stroke="#059669"
+                name="PRIME guaranteed income"
+                stroke="#10B981"
                 strokeWidth={2}
                 dot={false}
-                strokeDasharray="3 3"
+                strokeDasharray="4 4"
               />
             )}
           </ComposedChart>

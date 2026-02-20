@@ -26,9 +26,9 @@ function applyTax(
 } {
   const earned = row.earnedIncome * (1 - taxRates.earnedPct / 100);
   const ss = row.socialSecurity * (1 - taxRates.ssPct / 100);
-  const pensionOther =
-    (row.pension + row.otherAnnuities + row.rental + (row.guaranteedFromPrime ?? 0)) *
-    (1 - taxRates.pensionOtherPct / 100);
+  const pensionOnly = (row.pension + row.otherAnnuities + row.rental) * (1 - taxRates.pensionOtherPct / 100);
+  const annuityGuaranteed = (row.guaranteedFromPrime ?? 0) * (1 - taxRates.pensionOtherPct / 100);
+  const pensionOther = pensionOnly + annuityGuaranteed;
   const draws =
     row.accountDraws.qualified +
     row.accountDraws.roth +
@@ -48,11 +48,13 @@ function applyTax(
     annualTotal,
     monthlyTotal,
     guaranteedPct,
+    guaranteedDollars,
   };
 }
 
 /** Step 5: Current path income summary; Step 7: PRIME path (same table with annuity) */
 type ShortageDisplayMode = "dollar" | "percent";
+type GuaranteedDisplayMode = "dollar" | "percent";
 
 type IncomeSummaryVariant = "current" | "prime";
 
@@ -73,6 +75,9 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
   const [showByAccount, setShowByAccount] = useState(false);
   const [showPostTax, setShowPostTax] = useState(false);
   const [shortageDisplayMode, setShortageDisplayMode] = useState<ShortageDisplayMode>("dollar");
+  const [guaranteedDisplayMode, setGuaranteedDisplayMode] = useState<GuaranteedDisplayMode>("percent");
+  const [showShortageSurplusColumn, setShowShortageSurplusColumn] = useState(true);
+  const [showGuaranteedAmountColumn, setShowGuaranteedAmountColumn] = useState(true);
 
   const isMonthly = income.amountDisplayMode === "monthly";
   const retirementAge = projection.retirementAge;
@@ -168,14 +173,17 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
       row.accountDraws.taxable +
       row.accountDraws.cash +
       row.accountDraws.insurance;
-    const primeAnnuity = row.guaranteedFromPrime ?? 0;
+    const annuityGuaranteedIncome = row.guaranteedFromPrime ?? 0;
+    const guaranteedDollars = showPostTax ? applyTax(row, taxRates).guaranteedDollars : row.guaranteedDollars;
     return {
       earnedIncome: row.earnedIncome,
       socialSecurity: row.socialSecurity,
-      pensionOther: row.pension + row.otherAnnuities + row.rental + primeAnnuity,
+      pensionOther: row.pension + row.otherAnnuities + row.rental,
+      annuityGuaranteedIncome,
       combinedDraws,
       totalDisplay: isMonthly ? row.monthlyTotal : row.annualTotal,
       guaranteedPct: row.guaranteedPct,
+      guaranteedDollars,
       accountDraws: row.accountDraws,
     };
   };
@@ -189,8 +197,9 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
       const ssClient = taxMul(row.socialSecurityClient, taxRates.ssPct);
       const ssSpouse = taxMul(row.socialSecuritySpouse, taxRates.ssPct);
       const primeAnnuity = row.guaranteedFromPrime ?? 0;
-      const pensionClient = taxMul(row.pensionOtherRentalClient + (isPrime ? primeAnnuity : 0), taxRates.pensionOtherPct);
+      const pensionClient = taxMul(row.pensionOtherRentalClient, taxRates.pensionOtherPct);
       const pensionSpouse = taxMul(row.pensionOtherRentalSpouse, taxRates.pensionOtherPct);
+      const annuityGuaranteedIncome = taxMul(primeAnnuity, taxRates.pensionOtherPct);
       const draws = {
         qualified: ad.qualified * acctMul,
         roth: ad.roth * acctMul,
@@ -208,11 +217,10 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
         insuranceClient: (ad.insuranceClient ?? 0) * acctMul,
         insuranceSpouse: (ad.insuranceSpouse ?? 0) * acctMul,
       };
-      const annualTotal = earnedClient + earnedSpouse + ssClient + ssSpouse + pensionClient + pensionSpouse +
+      const annualTotal = earnedClient + earnedSpouse + ssClient + ssSpouse + pensionClient + pensionSpouse + annuityGuaranteedIncome +
         draws.qualified + draws.roth + draws.taxable + draws.cash + draws.insurance;
-      const guaranteedPct = annualTotal > 0
-        ? ((ssClient + ssSpouse + pensionClient + pensionSpouse) / annualTotal) * 100
-        : 0;
+      const guaranteedDollars = ssClient + ssSpouse + pensionClient + pensionSpouse + annuityGuaranteedIncome;
+      const guaranteedPct = annualTotal > 0 ? (guaranteedDollars / annualTotal) * 100 : 0;
       return {
         earnedClient,
         earnedSpouse,
@@ -220,9 +228,11 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
         ssSpouse,
         pensionClient,
         pensionSpouse,
+        annuityGuaranteedIncome,
         accountDraws: draws,
         totalDisplay: isMonthly ? annualTotal / 12 : annualTotal,
         guaranteedPct,
+        guaranteedDollars,
       };
     }
     const primeAnnuity = row.guaranteedFromPrime ?? 0;
@@ -231,11 +241,13 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
       earnedSpouse: row.earnedIncomeSpouse,
       ssClient: row.socialSecurityClient,
       ssSpouse: row.socialSecuritySpouse,
-      pensionClient: row.pensionOtherRentalClient + (isPrime ? primeAnnuity : 0),
+      pensionClient: row.pensionOtherRentalClient,
       pensionSpouse: row.pensionOtherRentalSpouse,
+      annuityGuaranteedIncome: primeAnnuity,
       accountDraws: ad,
       totalDisplay: isMonthly ? row.monthlyTotal : row.annualTotal,
       guaranteedPct: row.guaranteedPct,
+      guaranteedDollars: row.guaranteedDollars,
     };
   };
 
@@ -283,13 +295,14 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
     const earnedCols = (showEarnedClient ? 1 : 0) + (showEarnedSpouse ? 1 : 0);
     const ssCols = (showSSClient ? 1 : 0) + (showSSSpouse ? 1 : 0);
     const pensionCols = (showPensionClient ? 1 : 0) + (showPensionSpouse ? 1 : 0);
+    const showAnnuityGuaranteed = variant === "prime";
     const accountCols =
       (showQualifiedClient ? 1 : 0) + (showQualifiedSpouse ? 1 : 0) +
       (showRothClient ? 1 : 0) + (showRothSpouse ? 1 : 0) +
       (showTaxableClient ? 1 : 0) + (showTaxableSpouse ? 1 : 0) +
       (showCashClient ? 1 : 0) + (showCashSpouse ? 1 : 0) +
       (showInsuranceClient ? 1 : 0) + (showInsuranceSpouse ? 1 : 0);
-    const totalCols = ageCols + earnedCols + ssCols + pensionCols + accountCols + 4;
+    const totalCols = ageCols + earnedCols + ssCols + pensionCols + (showAnnuityGuaranteed ? 1 : 0) + accountCols + 4;
     return {
       showAgeClient,
       showAgeSpouse,
@@ -299,6 +312,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
       showSSSpouse,
       showPensionClient,
       showPensionSpouse,
+      showAnnuityGuaranteed,
       showQualifiedClient,
       showQualifiedSpouse,
       showRothClient,
@@ -311,11 +325,11 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
       showInsuranceSpouse,
       totalCols,
     };
-  }, [projection.rows, hasSpouse]);
-
-  const totalCols = showByAccount ? detailedColumnVisibility.totalCols : 9;
+  }, [projection.rows, hasSpouse, variant]);
 
   const isPrime = variant === "prime";
+  const baseCols = showByAccount ? detailedColumnVisibility.totalCols : (isPrime ? 10 : 9);
+  const totalCols = baseCols - (showGuaranteedAmountColumn ? 0 : 1) - (showShortageSurplusColumn ? 0 : 1);
 
   return (
     <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
@@ -376,61 +390,114 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
         >
           {showPostTax ? "Show pre-tax" : "Show post-tax"}
         </button>
-        <span className="text-sm text-gray-500">Target goal is always entered as pre-tax.</span>
+        <span className="text-sm text-gray-500">Target Goal is always entered as pre-tax.</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        <span className="text-sm text-gray-400">Shortage / Surplus:</span>
-        <div className="inline-flex rounded-lg bg-gray-800 p-0.5 border border-gray-600">
-          <button
-            type="button"
-            onClick={() => setShortageDisplayMode("dollar")}
-            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-              shortageDisplayMode === "dollar" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            $
-          </button>
-          <button
-            type="button"
-            onClick={() => setShortageDisplayMode("percent")}
-            className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-              shortageDisplayMode === "percent" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            %
-          </button>
+      <div className="flex flex-wrap items-center gap-4 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-400">Shortage / Surplus:</span>
+          <div className="inline-flex rounded-lg bg-gray-800 p-0.5 border border-gray-600">
+            <button
+              type="button"
+              onClick={() => setShortageDisplayMode("dollar")}
+              className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                shortageDisplayMode === "dollar" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              $
+            </button>
+            <button
+              type="button"
+              onClick={() => setShortageDisplayMode("percent")}
+              className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                shortageDisplayMode === "percent" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              %
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowShortageSurplusColumn((prev) => !prev)}
+              className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                showShortageSurplusColumn ? "text-gray-400 hover:text-white" : "bg-gray-600 text-white"
+              }`}
+            >
+              {showShortageSurplusColumn ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-400">Guaranteed Amount:</span>
+          <div className="inline-flex rounded-lg bg-gray-800 p-0.5 border border-gray-600">
+            <button
+              type="button"
+              onClick={() => setGuaranteedDisplayMode("dollar")}
+              className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                guaranteedDisplayMode === "dollar" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              $
+            </button>
+            <button
+              type="button"
+              onClick={() => setGuaranteedDisplayMode("percent")}
+              className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                guaranteedDisplayMode === "percent" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              %
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowGuaranteedAmountColumn((prev) => !prev)}
+              className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                showGuaranteedAmountColumn ? "text-gray-400 hover:text-white" : "bg-gray-600 text-white"
+              }`}
+            >
+              {showGuaranteedAmountColumn ? "Hide" : "Show"}
+            </button>
+          </div>
         </div>
       </div>
 
+      <h3 className="text-base font-semibold text-gray-300 mb-3 text-center">
+        Summary Values at Retirement{retirementAge != null ? ` (Age ${retirementAge})` : ""}
+      </h3>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div className="p-4 rounded-lg border-l-4" style={{ backgroundColor: "var(--col-earned-bg)", borderLeftColor: "var(--col-earned)" }}>
-          <div className="text-sm font-medium" style={{ color: "var(--col-earned)" }}>First-year income</div>
+          <div className="text-sm font-medium" style={{ color: "var(--col-earned)" }}>First Year Retirement Income</div>
           <div className="text-white font-semibold mt-1">
             {isMonthly
-              ? `$${Math.round(showPostTax ? applyTax(firstYear, taxRates).monthlyTotal : firstYear.monthlyTotal).toLocaleString()}/mo`
-              : `$${Math.round(showPostTax ? applyTax(firstYear, taxRates).annualTotal : firstYear.annualTotal).toLocaleString()}/yr`}
+              ? `$${Math.round(showPostTax ? applyTax(firstRetirementRow ?? firstYear, taxRates).monthlyTotal : (firstRetirementRow ?? firstYear).monthlyTotal).toLocaleString()}/mo`
+              : `$${Math.round(showPostTax ? applyTax(firstRetirementRow ?? firstYear, taxRates).annualTotal : (firstRetirementRow ?? firstYear).annualTotal).toLocaleString()}/yr`}
           </div>
           {showPostTax && <div className="text-xs text-gray-500 mt-0.5">After tax</div>}
         </div>
         <div className="p-4 rounded-lg border-l-4" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)", borderLeftColor: "var(--col-guaranteed-pct)" }}>
-          <div className="text-sm font-medium" style={{ color: "var(--col-guaranteed-pct)" }}>Guaranteed % (first year of retirement)</div>
+          <div className="text-sm font-medium" style={{ color: "var(--col-guaranteed-pct)" }}>1st Year Guaranteed Amount</div>
           <div className="text-white font-semibold mt-1">
             {firstRetirementRow != null
               ? `${Math.round(showPostTax ? applyTax(firstRetirementRow, taxRates).guaranteedPct : firstRetirementRow.guaranteedPct)}%`
               : "—"}
           </div>
           {firstRetirementRow != null && (
-            <div className="text-xs text-gray-500 mt-0.5">Age {firstRetirementRow.clientAge}</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              {isMonthly
+                ? `$${Math.round(showPostTax ? applyTax(firstRetirementRow, taxRates).guaranteedDollars / 12 : firstRetirementRow.guaranteedDollars / 12).toLocaleString()}/mo`
+                : `$${Math.round(showPostTax ? applyTax(firstRetirementRow, taxRates).guaranteedDollars : firstRetirementRow.guaranteedDollars).toLocaleString()}/yr`}
+            </div>
           )}
         </div>
         <div className="p-4 rounded-lg border-l-4" style={{ backgroundColor: "var(--col-accounts-bg)", borderLeftColor: "var(--col-accounts)" }}>
-          <div className="text-sm font-medium" style={{ color: "var(--col-accounts)" }}>FV at retirement</div>
+          <div className="text-sm font-medium" style={{ color: "var(--col-accounts)" }}>Future Values of Combined Account Balances</div>
           <div className="text-white font-semibold mt-1">${totalFv.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
         </div>
         <div className="p-4 rounded-lg border-l-4" style={{ backgroundColor: "var(--col-age-bg)", borderLeftColor: "var(--col-age)" }}>
-          <div className="text-sm font-medium" style={{ color: "var(--col-age)" }}>Plan horizon</div>
+          <div className="text-sm font-medium" style={{ color: "var(--col-age)" }}>Plan Horizon</div>
           <div className="text-white font-semibold mt-1">Age {firstYear.clientAge} – {lastYear.clientAge}</div>
+          {retirementAge != null && (
+            <div className="text-xs text-gray-500 mt-0.5">First year of retirement at Age {retirementAge}</div>
+          )}
         </div>
       </div>
 
@@ -540,10 +607,10 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                   {(detailedColumnVisibility.showEarnedClient || detailedColumnVisibility.showEarnedSpouse) && (
                     <>
                       {detailedColumnVisibility.showEarnedClient && (
-                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned income</th>
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned Income</th>
                       )}
                       {detailedColumnVisibility.showEarnedSpouse && (
-                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned income</th>
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned Income</th>
                       )}
                     </>
                   )}
@@ -560,12 +627,15 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                   {(detailedColumnVisibility.showPensionClient || detailedColumnVisibility.showPensionSpouse) && (
                     <>
                       {detailedColumnVisibility.showPensionClient && (
-                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Pension / other</th>
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income Sources</th>
                       )}
                       {detailedColumnVisibility.showPensionSpouse && (
-                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Pension / other</th>
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income Sources</th>
                       )}
                     </>
+                  )}
+                  {detailedColumnVisibility.showAnnuityGuaranteed && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Annuity Guaranteed Income</th>
                   )}
                   {detailedColumnVisibility.showQualifiedClient && (
                     <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Qualified</th>
@@ -598,9 +668,13 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                     <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Insurance</th>
                   )}
                   <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-total)", color: "var(--col-total)", backgroundColor: "var(--col-total-bg)" }}>Total</th>
-                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-target)", color: "var(--col-target)", backgroundColor: "var(--col-target-bg)" }}>Target goal</th>
-                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed-pct)", color: "var(--col-guaranteed-pct)", backgroundColor: "var(--col-guaranteed-pct-bg)" }}>Guaranteed %</th>
-                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-shortage)", color: "var(--col-shortage)", backgroundColor: "var(--col-shortage-bg)" }}>Shortage / Surplus</th>
+                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-target)", color: "var(--col-target)", backgroundColor: "var(--col-target-bg)" }}>Target Goal</th>
+                  {showGuaranteedAmountColumn && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed-pct)", color: "var(--col-guaranteed-pct)", backgroundColor: "var(--col-guaranteed-pct-bg)" }}>Guaranteed Amount</th>
+                  )}
+                  {showShortageSurplusColumn && (
+                    <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-shortage)", color: "var(--col-shortage)", backgroundColor: "var(--col-shortage-bg)" }}>Shortage / Surplus</th>
+                  )}
                 </tr>
                 <tr className="text-left border-b border-gray-600 text-xs text-gray-400">
                   {detailedColumnVisibility.showAgeClient && (
@@ -626,6 +700,9 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                   )}
                   {detailedColumnVisibility.showPensionSpouse && (
                     <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{spouseLabel}</th>
+                  )}
+                  {detailedColumnVisibility.showAnnuityGuaranteed && (
+                    <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-bg)" }} />
                   )}
                   {detailedColumnVisibility.showQualifiedClient && (
                     <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{clientLabel}</th>
@@ -659,8 +736,8 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                   )}
                   <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-total-bg)" }} />
                   <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-target-bg)" }} />
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)" }} />
-                  <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-shortage-bg)" }} />
+                  {showGuaranteedAmountColumn && <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)" }} />}
+                  {showShortageSurplusColumn && <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-shortage-bg)" }} />}
                 </tr>
               </>
             ) : (
@@ -671,14 +748,21 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                     <div className="text-xs text-gray-400 mt-0.5">{client.name}</div>
                   )}
                 </th>
-                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned income</th>
+                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned Income</th>
                 <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>SS</th>
-                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Pension / other</th>
-                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Combined accounts</th>
+                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income Sources</th>
+                {isPrime && (
+                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Annuity Guaranteed Income</th>
+                )}
+                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-accounts)", color: "var(--col-accounts)", backgroundColor: "var(--col-accounts-bg)" }}>Combined Accounts</th>
                 <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-total)", color: "var(--col-total)", backgroundColor: "var(--col-total-bg)" }}>Total</th>
-                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-target)", color: "var(--col-target)", backgroundColor: "var(--col-target-bg)" }}>Target goal</th>
-                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed-pct)", color: "var(--col-guaranteed-pct)", backgroundColor: "var(--col-guaranteed-pct-bg)" }}>Guaranteed %</th>
-                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-shortage)", color: "var(--col-shortage)", backgroundColor: "var(--col-shortage-bg)" }}>Shortage / Surplus</th>
+                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-target)", color: "var(--col-target)", backgroundColor: "var(--col-target-bg)" }}>Target Goal</th>
+                {showGuaranteedAmountColumn && (
+                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed-pct)", color: "var(--col-guaranteed-pct)", backgroundColor: "var(--col-guaranteed-pct-bg)" }}>Guaranteed Amount</th>
+                )}
+                {showShortageSurplusColumn && (
+                  <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-shortage)", color: "var(--col-shortage)", backgroundColor: "var(--col-shortage-bg)" }}>Shortage / Surplus</th>
+                )}
               </tr>
             )}
           </thead>
@@ -740,6 +824,9 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                         {detailedColumnVisibility.showPensionSpouse && (
                           <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(d.pensionSpouse)}</td>
                         )}
+                        {detailedColumnVisibility.showAnnuityGuaranteed && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt((d as { annuityGuaranteedIncome?: number }).annuityGuaranteedIncome ?? 0)}</td>
+                        )}
                         {detailedColumnVisibility.showQualifiedClient && (
                           <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt((d.accountDraws as { qualifiedClient?: number }).qualifiedClient ?? 0)}</td>
                         )}
@@ -772,13 +859,21 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                         )}
                         <td className="py-2 pr-4 pl-3 text-white font-medium" style={{ backgroundColor: "var(--col-total-bg)" }}>{Math.round(d.totalDisplay).toLocaleString()}</td>
                         <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-target-bg)" }}>{Math.round(targetGoalDisplay).toLocaleString()}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)" }}>{Math.round(d.guaranteedPct)}%</td>
-                        <td
-                          className={`py-2 pr-4 pl-3 font-medium ${isShortage ? "text-red-400" : isSurplus ? "text-green-400" : "text-gray-400"}`}
-                          style={{ backgroundColor: "var(--col-shortage-bg)" }}
-                        >
-                          {shortageLabel}
-                        </td>
+                        {showGuaranteedAmountColumn && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)" }}>
+                            {guaranteedDisplayMode === "percent"
+                              ? `${Math.round(d.guaranteedPct)}%`
+                              : fmt(isMonthly ? ((d as { guaranteedDollars?: number }).guaranteedDollars ?? 0) / 12 : (d as { guaranteedDollars?: number }).guaranteedDollars ?? 0)}
+                          </td>
+                        )}
+                        {showShortageSurplusColumn && (
+                          <td
+                            className={`py-2 pr-4 pl-3 font-medium ${isShortage ? "text-red-400" : isSurplus ? "text-green-400" : "text-gray-400"}`}
+                            style={{ backgroundColor: "var(--col-shortage-bg)" }}
+                          >
+                            {shortageLabel}
+                          </td>
+                        )}
                       </>
                     ) : (
                       <>
@@ -786,16 +881,27 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                         <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-earned-bg)" }}>{fmt(v.earnedIncome)}</td>
                         <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(v.socialSecurity)}</td>
                         <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(v.pensionOther)}</td>
+                        {isPrime && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-bg)" }}>{fmt(v.annuityGuaranteedIncome)}</td>
+                        )}
                         <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-accounts-bg)" }}>{fmt(v.combinedDraws)}</td>
                         <td className="py-2 pr-4 pl-3 text-white font-medium" style={{ backgroundColor: "var(--col-total-bg)" }}>{Math.round(v.totalDisplay).toLocaleString()}</td>
                         <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-target-bg)" }}>{Math.round(targetGoalDisplay).toLocaleString()}</td>
-                        <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)" }}>{Math.round(v.guaranteedPct)}%</td>
-                        <td
-                          className={`py-2 pr-4 pl-3 font-medium ${isShortage ? "text-red-400" : isSurplus ? "text-green-400" : "text-gray-400"}`}
-                          style={{ backgroundColor: "var(--col-shortage-bg)" }}
-                        >
-                          {shortageLabel}
-                        </td>
+                        {showGuaranteedAmountColumn && (
+                          <td className="py-2 pr-4 pl-3 text-gray-300" style={{ backgroundColor: "var(--col-guaranteed-pct-bg)" }}>
+                            {guaranteedDisplayMode === "percent"
+                              ? `${Math.round(v.guaranteedPct)}%`
+                              : fmt(isMonthly ? v.guaranteedDollars / 12 : v.guaranteedDollars)}
+                          </td>
+                        )}
+                        {showShortageSurplusColumn && (
+                          <td
+                            className={`py-2 pr-4 pl-3 font-medium ${isShortage ? "text-red-400" : isSurplus ? "text-green-400" : "text-gray-400"}`}
+                            style={{ backgroundColor: "var(--col-shortage-bg)" }}
+                          >
+                            {shortageLabel}
+                          </td>
+                        )}
                       </>
                     )}
                   </tr>
