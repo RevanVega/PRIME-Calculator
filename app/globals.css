@@ -40,3 +40,9 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   opacity: 1;
 }
+
+/* Center all headers and cells in income summary tables */
+.income-summary-table th,
+.income-summary-table td {
+  text-align: center;
+}

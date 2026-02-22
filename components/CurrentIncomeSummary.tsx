@@ -52,7 +52,7 @@ function applyTax(
   };
 }
 
-/** Step 5: Current path income summary; Step 7: PRIME path (same table with annuity) */
+/** Step 6: Current path summary; Step 7: PRIME path (same table with annuity) */
 type ShortageDisplayMode = "dollar" | "percent";
 type GuaranteedDisplayMode = "dollar" | "percent";
 
@@ -63,6 +63,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
     income,
     setIncome,
     guaranteedIncome,
+    annuityPrimeOptions,
     accountsTaxRatePct,
     clientTaxRateAssumptionPct,
     accounts,
@@ -111,7 +112,27 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
   const firstYear = projection.rows[0];
   const lastYear = projection.rows[projection.rows.length - 1];
   const fv = projection.futureValuesAtRetirement;
-  const totalFv = fv.qualified + fv.roth + fv.taxable + fv.cash + fv.insurance;
+
+  /** Annuity balances (qualified) grown at default 2% to retirement; included in Qualified at retirement */
+  const annuityValueAtRetirement = useMemo(() => {
+    const yearsToRetirement = Math.max(0, (retirementAge ?? client.currentAge ?? 0) - (client.currentAge ?? 0));
+    const growth = 1 + 2 / 100; // default annuity growth 2%
+    return guaranteedIncome.annuities.reduce(
+      (sum, a) => sum + ((a.balance ?? 0) * Math.pow(growth, yearsToRetirement)),
+      0
+    );
+  }, [guaranteedIncome.annuities, retirementAge, client.currentAge]);
+
+  /** PRIME premiums from qualified: add back so snapshot shows qualified + annuity (annuity is qualified) */
+  const primeQualifiedPremium = useMemo(() => {
+    if (variant !== "prime" || !annuityPrimeOptions?.length) return 0;
+    return annuityPrimeOptions
+      .filter((opt) => opt.referencedAccountType === "qualified" && (opt.premiumAmount ?? 0) > 0)
+      .reduce((sum, opt) => sum + (opt.premiumAmount ?? 0), 0);
+  }, [variant, annuityPrimeOptions]);
+
+  const qualifiedAtRetirement = fv.qualified + annuityValueAtRetirement + primeQualifiedPremium;
+  const totalFv = fv.qualified + fv.roth + fv.taxable + fv.cash + fv.insurance + annuityValueAtRetirement + primeQualifiedPremium;
 
   const accountsCurrentByType = useMemo(
     () => {
@@ -259,7 +280,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
         </h2>
         <p className="text-gray-400">
           {variant === "prime"
-            ? "Add a PRIME option in the Prime step to see your PRIME path summary."
+            ? "Add a PRIME option in the PRIME step to see your PRIME path summary."
             : "Complete steps 1–4 to see your projected income summary."}
         </p>
       </section>
@@ -507,9 +528,9 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
           <span className="text-xs text-gray-400">Current vs at retirement</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs sm:text-sm border-collapse">
+          <table className="w-full text-xs sm:text-sm border-collapse income-summary-table">
             <thead>
-              <tr className="text-left border-b border-gray-700">
+              <tr className="border-b border-gray-700">
                 <th className="py-2 pr-4 text-gray-400 font-medium"> </th>
                 <th
                   className="py-2 pr-4 pl-3 font-medium"
@@ -541,7 +562,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                 >
                   Insurance
                 </th>
-                <th className="py-2 pr-4 text-gray-400 font-medium text-right">Total</th>
+                <th className="py-2 pr-4 text-gray-400 font-medium">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -562,14 +583,14 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                 <td className="py-2 pr-4 pl-3 text-gray-100">
                   ${accountsCurrentByType.insurance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </td>
-                <td className="py-2 pr-4 text-gray-100 text-right">
+                <td className="py-2 pr-4 text-gray-100">
                   ${accountsCurrentTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </td>
               </tr>
               <tr>
                 <td className="py-2 pr-4 text-gray-300">At retirement</td>
                 <td className="py-2 pr-4 pl-3 text-gray-100">
-                  ${fv.qualified.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  ${Math.round(qualifiedAtRetirement).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </td>
                 <td className="py-2 pr-4 pl-3 text-gray-100">
                   ${fv.taxable.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -583,7 +604,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                 <td className="py-2 pr-4 pl-3 text-gray-100">
                   ${fv.insurance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </td>
-                <td className="py-2 pr-4 text-gray-100 text-right">
+                <td className="py-2 pr-4 text-gray-100">
                   ${totalFv.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </td>
               </tr>
@@ -593,11 +614,11 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+        <table className="w-full text-sm border-collapse income-summary-table">
           <thead>
             {showByAccount ? (
               <>
-                <tr className="text-left border-b border-gray-600">
+                <tr className="border-b border-gray-600">
                   {detailedColumnVisibility.showAgeClient && (
                     <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-age)", color: "var(--col-age)", backgroundColor: "var(--col-age-bg)" }}>Age</th>
                   )}
@@ -627,10 +648,10 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                   {(detailedColumnVisibility.showPensionClient || detailedColumnVisibility.showPensionSpouse) && (
                     <>
                       {detailedColumnVisibility.showPensionClient && (
-                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income Sources</th>
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income</th>
                       )}
                       {detailedColumnVisibility.showPensionSpouse && (
-                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income Sources</th>
+                        <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income</th>
                       )}
                     </>
                   )}
@@ -676,7 +697,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                     <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-shortage)", color: "var(--col-shortage)", backgroundColor: "var(--col-shortage-bg)" }}>Shortage / Surplus</th>
                   )}
                 </tr>
-                <tr className="text-left border-b border-gray-600 text-xs text-gray-400">
+                <tr className="border-b border-gray-600 text-xs text-gray-400">
                   {detailedColumnVisibility.showAgeClient && (
                     <th className="py-1 pr-4 pl-3 font-normal" style={{ backgroundColor: "var(--col-age-bg)" }}>{clientLabel}</th>
                   )}
@@ -741,7 +762,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                 </tr>
               </>
             ) : (
-              <tr className="text-left border-b border-gray-600">
+              <tr className="border-b border-gray-600">
                 <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-age)", color: "var(--col-age)", backgroundColor: "var(--col-age-bg)" }}>
                   <div>Age</div>
                   {client.name && (
@@ -750,7 +771,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
                 </th>
                 <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-earned)", color: "var(--col-earned)", backgroundColor: "var(--col-earned-bg)" }}>Earned Income</th>
                 <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>SS</th>
-                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income Sources</th>
+                <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Guaranteed Income</th>
                 {isPrime && (
                   <th className="py-2 pr-4 border-l-2 pl-3 font-medium" style={{ borderLeftColor: "var(--col-guaranteed)", color: "var(--col-guaranteed)", backgroundColor: "var(--col-guaranteed-bg)" }}>Annuity Guaranteed Income</th>
                 )}

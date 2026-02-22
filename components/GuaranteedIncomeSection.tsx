@@ -201,6 +201,7 @@ export default function GuaranteedIncomeSection() {
                     </select>
                   </div>
                 )}
+                <Input label="Current value ($)" value={a.balance ?? ""} onChange={(v) => updateAnnuity(a.id, { balance: Number(v) || 0 })} />
                 <Input label="Amount (monthly)" value={a.amount || ""} onChange={(v) => updateAnnuity(a.id, { amount: Number(v) || 0 })} />
                 <Input label="Start age" value={a.startAge || ""} onChange={(v) => updateAnnuity(a.id, { startAge: Number(v) || 0 })} />
                 <Input label="COLA (%)" value={a.colaPct ?? ""} onChange={(v) => updateAnnuity(a.id, { colaPct: Number(v) || 0 })} />

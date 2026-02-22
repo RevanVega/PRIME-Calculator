@@ -52,6 +52,8 @@ export interface PensionOrAnnuityIncome {
   taxRatePct: number;
   /** Who receives this income; default client */
   owner?: IncomeOwner;
+  /** Annuity only: current account value; grown at default 2% to retirement for snapshot */
+  balance?: number;
 }
 
 export interface RentalIncome {

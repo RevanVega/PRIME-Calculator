@@ -25,13 +25,13 @@ import {
 type UpdateFn<T> = (prev: T) => T;
 
 export const STEPS = [
-  "Client information",
-  "Income",
-  "Guaranteed income",
+  "Client Information",
+  "Current Income",
+  "Retirement Income",
   "Accounts",
-  "Current income summary",
-  "Prime",
-  "PRIME income summary",
+  "PRIME",
+  "Current Summary",
+  "PRIME Summary",
   "Comparison",
 ] as const;
 export type StepId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;

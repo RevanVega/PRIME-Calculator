@@ -29,9 +29,9 @@ function StepContent({ step }: { step: StepId }) {
     case 4:
       return <AccountsSection />;
     case 5:
-      return <CurrentIncomeSummary />;
-    case 6:
       return <AnnuityPrimeSection />;
+    case 6:
+      return <CurrentIncomeSummary />;
     case 7:
       return <CurrentIncomeSummary variant="prime" />;
     case 8:

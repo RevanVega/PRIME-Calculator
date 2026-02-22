@@ -1,11 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import { useCalculator } from "@/context/CalculatorContext";
 import { useProjection } from "@/hooks/useProjection";
+import { runMonteCarlo } from "@/lib/monte-carlo";
+import { HISTORICAL_RETURNS_PCT } from "@/lib/historical-returns";
 import {
   ComposedChart,
   Line,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -69,6 +71,16 @@ export default function ComparisonGraph() {
     client?.currentAge != null && current.retirementAge != null
       ? currentYear + (current.retirementAge - client.currentAge)
       : currentYear;
+
+  const monteCarloResults = useMemo(() => {
+    if (current.rows.length === 0) return null;
+    const currentResult = runMonteCarlo(current, HISTORICAL_RETURNS_PCT, 1000);
+    const primeResult =
+      hasPrimePath && prime.rows.length > 0
+        ? runMonteCarlo(prime, HISTORICAL_RETURNS_PCT, 1000)
+        : null;
+    return { current: currentResult, prime: primeResult };
+  }, [current, prime, hasPrimePath]);
 
   const renderAgeBox = (
     label: string,
@@ -152,16 +164,6 @@ export default function ComparisonGraph() {
             data={chartData}
             margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
           >
-            <defs>
-              <linearGradient id="guaranteedCurrentFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.85} />
-                <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.6} />
-              </linearGradient>
-              <linearGradient id="guaranteedPrimeFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10B981" stopOpacity={0.85} />
-                <stop offset="100%" stopColor="#10B981" stopOpacity={0.6} />
-              </linearGradient>
-            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
             <XAxis
               dataKey="age"
@@ -187,31 +189,10 @@ export default function ComparisonGraph() {
               wrapperStyle={{ fontSize: 12 }}
               formatter={(value) => <span className="text-gray-300">{value}</span>}
             />
-            {/* Guaranteed areas (shadow/fill) — drawn first so lines sit on top */}
-            <Area
-              type="monotone"
-              dataKey="guaranteedCurrent"
-              name="Current guaranteed (area)"
-              fill="url(#guaranteedCurrentFill)"
-              stroke="none"
-              isAnimationActive={false}
-              hide
-            />
-            {hasPrimePath && (
-              <Area
-                type="monotone"
-                dataKey="guaranteedPrime"
-                name="PRIME guaranteed (area)"
-                fill="url(#guaranteedPrimeFill)"
-                stroke="none"
-                isAnimationActive={false}
-                hide
-              />
-            )}
             <Line
               type="monotone"
               dataKey="current"
-              name="Current path"
+              name="Current Path"
               stroke="#3B82F6"
               strokeWidth={2}
               dot={false}
@@ -220,26 +201,16 @@ export default function ComparisonGraph() {
               <Line
                 type="monotone"
                 dataKey="prime"
-                name="PRIME path"
+                name="PRIME Path"
                 stroke="#10B981"
                 strokeWidth={2}
-                dot={false}
-              />
-            )}
-            {hasTarget && (
-              <Line
-                type="monotone"
-                dataKey="target"
-                name="Income goal"
-                stroke="#F59E0B"
-                strokeWidth={1.5}
                 dot={false}
               />
             )}
             <Line
               type="monotone"
               dataKey="guaranteedCurrent"
-              name="Guaranteed income (primary path)"
+              name="Current Guaranteed Income"
               stroke="#3B82F6"
               strokeWidth={2}
               dot={false}
@@ -249,11 +220,21 @@ export default function ComparisonGraph() {
               <Line
                 type="monotone"
                 dataKey="guaranteedPrime"
-                name="PRIME guaranteed income"
+                name="PRIME Guaranteed Income"
                 stroke="#10B981"
                 strokeWidth={2}
                 dot={false}
                 strokeDasharray="4 4"
+              />
+            )}
+            {hasTarget && (
+              <Line
+                type="monotone"
+                dataKey="target"
+                name="Income Goal"
+                stroke="#F59E0B"
+                strokeWidth={1.5}
+                dot={false}
               />
             )}
           </ComposedChart>
@@ -284,6 +265,55 @@ export default function ComparisonGraph() {
               {primeRowAt80 && renderAgeBox("Age 80", primeRowAt80, "prime")}
             </div>
           )}
+        </div>
+      )}
+
+      {current.rows.length > 0 && monteCarloResults && (
+        <div className="mt-6 p-5 rounded-xl bg-gray-800/60 border border-gray-600">
+          <h3 className="text-base font-semibold text-white mb-2">Monte Carlo Analysis</h3>
+          <p className="text-xs text-gray-400 mb-4">
+            A thousand scenarios using historical S&P returns. Success equals portfolio does not run out of money before the plan ends. This comparison assumes income and distributions are capped based on your income goal
+            {client?.currentMonthlyIncomeGoal != null && client.currentMonthlyIncomeGoal > 0 ? (
+              <> (${Math.round(client.currentMonthlyIncomeGoal).toLocaleString()}/mo)</>
+            ) : null}
+            .
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              { label: "Current Path", rate: monteCarloResults.current.successRatePct, pathKey: "current" },
+              ...(monteCarloResults.prime
+                ? [{ label: "PRIME Path", rate: monteCarloResults.prime.successRatePct, pathKey: "prime" as const }]
+                : []),
+            ].map(({ label, rate, pathKey }) => {
+              const tier = rate >= 80 ? "green" : rate >= 70 ? "yellow" : "red";
+              const borderColor =
+                tier === "green"
+                  ? "border-green-500"
+                  : tier === "yellow"
+                    ? "border-yellow-500"
+                    : "border-red-500";
+              const textColor =
+                tier === "green"
+                  ? "text-green-400"
+                  : tier === "yellow"
+                    ? "text-yellow-400"
+                    : "text-red-400";
+              return (
+                <div
+                  key={pathKey}
+                  className={`p-4 rounded-lg border-l-4 ${borderColor} bg-gray-900/50 border border-gray-600`}
+                >
+                  <div className="text-sm font-medium text-gray-300 mb-1">{label}</div>
+                  <div className={`text-2xl font-bold ${textColor}`}>
+                    {rate.toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    success rate{tier === "red" ? " — careful" : ""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </section>
