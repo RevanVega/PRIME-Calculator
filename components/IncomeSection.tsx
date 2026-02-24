@@ -31,6 +31,13 @@ export default function IncomeSection() {
   const { income, setIncome, hasSpouse, addSideIncome, removeSideIncome, updateSideIncome } = useCalculator();
   const mode = income.amountDisplayMode;
 
+  const parseNumber = (v: string): number => {
+    const cleaned = v.replace(/,/g, "").trim();
+    if (cleaned === "") return 0;
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   const setMode = (m: AmountDisplayMode) => setIncome({ ...income, amountDisplayMode: m });
 
   return (
@@ -95,12 +102,12 @@ export default function IncomeSection() {
           <h3 className="text-sm font-semibold text-blue-400">Client</h3>
           <Input
             label="Current income (annual)"
-            type="number"
-            value={income.client.currentIncomeAnnual || ""}
+            type="text"
+            value={income.client.currentIncomeAnnual ? income.client.currentIncomeAnnual.toLocaleString() : ""}
             onChange={(v) =>
               setIncome({
                 ...income,
-                client: { ...income.client, currentIncomeAnnual: Number(v) || 0 },
+                client: { ...income.client, currentIncomeAnnual: parseNumber(v) },
               })
             }
           />
@@ -121,12 +128,12 @@ export default function IncomeSection() {
             <h3 className="text-sm font-semibold text-blue-400">Spouse</h3>
             <Input
               label="Current income (annual)"
-              type="number"
-              value={income.spouse.currentIncomeAnnual || ""}
+              type="text"
+              value={income.spouse.currentIncomeAnnual ? income.spouse.currentIncomeAnnual.toLocaleString() : ""}
               onChange={(v) =>
                 setIncome({
                   ...income,
-                  spouse: { ...income.spouse, currentIncomeAnnual: Number(v) || 0 },
+                  spouse: { ...income.spouse, currentIncomeAnnual: parseNumber(v) },
                 })
               }
             />
@@ -165,9 +172,9 @@ export default function IncomeSection() {
               >
                 <Input
                   label="Amount (annual)"
-                  type="number"
-                  value={entry.amount || ""}
-                  onChange={(v) => updateSideIncome(entry.id, { amount: Number(v) || 0 })}
+                  type="text"
+                  value={entry.amount ? entry.amount.toLocaleString() : ""}
+                  onChange={(v) => updateSideIncome(entry.id, { amount: parseNumber(v) })}
                 />
                 <Input
                   label="Start age"

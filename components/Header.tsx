@@ -19,8 +19,8 @@ export default function Header() {
           </svg>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-white">PRIME Calculator</h1>
-          <p className="text-sm text-gray-400">Protected Retirement Income Made Easy</p>
+          <h1 className="text-2xl font-bold text-white">ALIGN Calculator</h1>
+          <p className="text-sm text-gray-400">Annual Lifetime Income Goals Navigator</p>
         </div>
       </div>
       <button

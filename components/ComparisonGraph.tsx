@@ -99,7 +99,7 @@ export default function ComparisonGraph() {
     };
   }, [stateWithOverrides, additionalSavingsAnnual]);
 
-  /** Combined scenario: all toggles applied (working longer, income goal, rate bump, extra savings) for one Monte Carlo: Current vs PRIME */
+  /** Combined scenario: all toggles applied (working longer, income goal, rate bump, extra savings) for one Monte Carlo: Current vs ALIGN */
   const stateCombined = useMemo(() => {
     let s = stateWithRateBump;
     if (additionalSavingsAnnual <= 0) return s;
@@ -387,15 +387,15 @@ export default function ComparisonGraph() {
 
   return (
     <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
-      <h2 className="text-lg font-semibold text-white mb-2">Comparison (Current vs PRIME)</h2>
+      <h2 className="text-lg font-semibold text-white mb-2">Comparison (Current vs ALIGN)</h2>
       <p className="text-sm text-gray-400 mb-4">
         Display: {income.amountDisplayMode}. Use the scenario toggles below the Monte Carlo section to compare Working Longer, Income Goal, Rate of Return, and Additional Savings.
       </p>
 
-      {/* PRIME option to compare — at top */}
+      {/* ALIGN option to compare — at top */}
       {validOptions.length > 0 && (
         <div className="mb-6 p-4 rounded-lg bg-gray-800/50 border border-gray-600">
-          <h3 className="text-sm font-medium text-gray-300 mb-3">PRIME option to compare</h3>
+          <h3 className="text-sm font-medium text-gray-300 mb-3">ALIGN option to compare</h3>
           <p className="text-xs text-gray-500 mb-3">Select an option to see how it affects the comparison.</p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -473,7 +473,7 @@ export default function ComparisonGraph() {
               <Line
                 type="monotone"
                 dataKey="prime"
-                name="PRIME Path"
+                name="ALIGN Path"
                 stroke="#10B981"
                 strokeWidth={2}
                 dot={false}
@@ -492,7 +492,7 @@ export default function ComparisonGraph() {
               <Line
                 type="monotone"
                 dataKey="guaranteedPrime"
-                name="PRIME Guaranteed Income"
+                name="ALIGN Guaranteed Income"
                 stroke="#10B981"
                 strokeWidth={2}
                 dot={false}
@@ -527,7 +527,7 @@ export default function ComparisonGraph() {
           </div>
           {hasPrimePath && prime.rows.length > 0 && (
             <div className="space-y-3">
-              <div className="text-emerald-400 font-medium mb-1">PRIME</div>
+              <div className="text-emerald-400 font-medium mb-1">ALIGN</div>
               {renderAgeBox(
                 `First year of retirement (Year ${retirementYear})`,
                 primeRetirementRow,
@@ -554,7 +554,7 @@ export default function ComparisonGraph() {
             {[
               { label: "Current Path", rate: Math.min(99, monteCarloResults.current.successRatePct), pathKey: "current" },
               ...(monteCarloResults.prime
-                ? [{ label: "PRIME Path", rate: Math.min(99, monteCarloResults.prime.successRatePct), pathKey: "prime" as const }]
+                ? [{ label: "ALIGN Path", rate: Math.min(99, monteCarloResults.prime.successRatePct), pathKey: "prime" as const }]
                 : []),
             ].map(({ label, rate, pathKey }) => {
               const tier = rate >= 80 ? "green" : rate >= 70 ? "yellow" : "red";
@@ -593,13 +593,13 @@ export default function ComparisonGraph() {
         <div className="mt-6 p-5 rounded-xl bg-gray-800/60 border border-gray-600 border-l-4 border-l-amber-500">
           <h3 className="text-base font-semibold text-white mb-2">Monte Carlo with all scenario adjustments</h3>
           <p className="text-xs text-gray-400 mb-4">
-            If all of your scenario toggles are applied together—Working Longer, Income Goal, rate of return bump, and Additional Savings—here are Current vs PRIME success rates under those assumptions.
+            If all of your scenario toggles are applied together—Working Longer, Income Goal, rate of return bump, and Additional Savings—here are Current vs ALIGN success rates under those assumptions.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { label: "Current Path", rate: Math.min(99, combinedMonteCarloResults.current.successRatePct), pathKey: "current" as const },
               ...(combinedMonteCarloResults.prime
-                ? [{ label: "PRIME Path", rate: Math.min(99, combinedMonteCarloResults.prime.successRatePct), pathKey: "prime" as const }]
+                ? [{ label: "ALIGN Path", rate: Math.min(99, combinedMonteCarloResults.prime.successRatePct), pathKey: "prime" as const }]
                 : []),
             ].map(({ label, rate, pathKey }) => {
               const tier = rate >= 80 ? "green" : rate >= 70 ? "yellow" : "red";
@@ -636,7 +636,7 @@ export default function ComparisonGraph() {
       <div className="mt-6 p-5 rounded-xl bg-gray-800/60 border border-gray-600">
         <h3 className="text-base font-semibold text-white mb-2">Scenario toggles</h3>
         <p className="text-xs text-gray-500 mb-4">
-          Turn on the toggles you want to compare. Working Longer and Income Goal affect the main chart and Monte Carlo above. When any adjustments are set, the &quot;Monte Carlo with all scenario adjustments&quot; block shows Current vs PRIME under those combined assumptions.
+          Turn on the toggles you want to compare. Working Longer and Income Goal affect the main chart and Monte Carlo above. When any adjustments are set, the &quot;Monte Carlo with all scenario adjustments&quot; block shows Current vs ALIGN under those combined assumptions.
         </p>
         <div className="flex flex-wrap gap-2 mb-4">
           <button
@@ -868,7 +868,7 @@ export default function ComparisonGraph() {
                     Assume the client passes away early. We estimate the income gap for the surviving spouse against{" "}
                     <span className="font-medium text-gray-300">85% of the original income goal</span>, reflecting a 15% reduction in household expenses.
                     Social Security is adjusted to the higher benefit. Pensions and annuities use the{" "}
-                    <span className="font-medium text-gray-300">survivor benefit %</span> you entered in Retirement Income: if a source is shown as surviving at 100%, there is no reduction; otherwise the client’s portion is reduced to that percentage. Single-life PRIME benefits owned by the client stop after death.
+                    <span className="font-medium text-gray-300">survivor benefit %</span> you entered in Retirement Income: if a source is shown as surviving at 100%, there is no reduction; otherwise the client’s portion is reduced to that percentage. Single-life ALIGN benefits owned by the client stop after death.
                     The analysis below uses your current scenario adjustments (Working Longer, Income Goal).
                   </p>
                   <div className="flex flex-wrap items-center gap-4">
@@ -943,7 +943,7 @@ export default function ComparisonGraph() {
                         {[
                           { label: "Current path", rate: Math.min(99, survivorMonteCarloResults.current.successRatePct), pathKey: "current" as const },
                           ...(survivorMonteCarloResults.prime != null
-                            ? [{ label: "PRIME path", rate: Math.min(99, survivorMonteCarloResults.prime.successRatePct), pathKey: "prime" as const }]
+                            ? [{ label: "ALIGN path", rate: Math.min(99, survivorMonteCarloResults.prime.successRatePct), pathKey: "prime" as const }]
                             : []),
                         ].map(({ label, rate, pathKey }) => {
                           const tier = rate >= 80 ? "green" : rate >= 70 ? "yellow" : "red";
@@ -973,7 +973,7 @@ export default function ComparisonGraph() {
                           <div className="mt-3 text-xs text-gray-400">
                             <span className="font-medium text-gray-300">Difference: </span>
                             {primeCapped >= currentCapped
-                              ? `PRIME path is ${(primeCapped - currentCapped).toFixed(1)} pts higher`
+                              ? `ALIGN path is ${(primeCapped - currentCapped).toFixed(1)} pts higher`
                               : `Current path is ${(currentCapped - primeCapped).toFixed(1)} pts higher`}
                           </div>
                         );

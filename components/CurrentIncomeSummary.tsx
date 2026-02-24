@@ -5,6 +5,7 @@ import { useCalculator } from "@/context/CalculatorContext";
 import { useProjection } from "@/hooks/useProjection";
 import type { AmountDisplayMode } from "@/lib/types";
 import type { ProjectionRow } from "@/lib/projection-types";
+import { getPrimeOptionAnnualPayout } from "@/lib/prime-utils";
 
 /** Apply tax rates to get post-tax values for display */
 function applyTax(
@@ -71,7 +72,9 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
     spouse,
     hasSpouse,
   } = useCalculator();
-  const { current, prime, hasPrimePath } = useProjection();
+  const { current, prime, hasPrimePath } = useProjection(
+    variant === "prime" ? { primeOptionsFilter: "first" } : undefined
+  );
   const projection = variant === "prime" && hasPrimePath ? prime : current;
   const [showByAccount, setShowByAccount] = useState(false);
   const [showPostTax, setShowPostTax] = useState(false);
@@ -276,11 +279,11 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
     return (
       <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
         <h2 className="text-lg font-semibold text-white mb-4">
-          {variant === "prime" ? "PRIME income summary" : "Current income summary"}
+          {variant === "prime" ? "ALIGN income summary" : "Current income summary"}
         </h2>
         <p className="text-gray-400">
           {variant === "prime"
-            ? "Add a PRIME option in the PRIME step to see your PRIME path summary."
+            ? "Add an ALIGN option in the ALIGN step to see your ALIGN path summary."
             : "Complete steps 1–4 to see your projected income summary."}
         </p>
       </section>
@@ -355,7 +358,7 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
   return (
     <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
       <h2 className="text-lg font-semibold text-white mb-2">
-        {isPrime ? "PRIME income summary" : "Current income summary"}
+        {isPrime ? "ALIGN income summary" : "Current income summary"}
       </h2>
       {(client.name || (hasSpouse && spouse.name)) && (
         <p className="text-xs text-gray-400 mb-1">
@@ -365,9 +368,9 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
           )}
         </p>
       )}
-      <p className="text-sm text-gray-400 mb-4">
+        <p className="text-sm text-gray-400 mb-4">
         {isPrime
-          ? "Projected income including your PRIME annuity option(s)."
+          ? "Projected income including ALIGN option 1 only. Use the Comparison step to toggle different options."
           : "Projected income from your current path (no annuity conversion)."}
       </p>
 
@@ -932,6 +935,48 @@ export default function CurrentIncomeSummary({ variant = "current" }: { variant?
           </tbody>
         </table>
       </div>
+
+      {isPrime && (
+        <div
+          id="assumptions-disclosures"
+          className="mt-8 pt-6 border-t border-gray-700 text-xs text-gray-400 space-y-4 print:mt-6 print:pt-4"
+        >
+          <h3 className="text-sm font-semibold text-gray-300">Assumptions & Disclosures</h3>
+
+          <div>
+            <h4 className="font-medium text-gray-400 mb-1">Assumptions (Steps 1–5)</h4>
+            <ul className="list-disc list-inside space-y-0.5 text-gray-500">
+              <li>
+                <strong>Client Information:</strong> Client age {client?.currentAge ?? "—"}, retirement age {client?.projectedRetirementAge ?? "—"}, plan through age {client?.projectedPlanAge ?? "—"}. Income goal ${client?.currentMonthlyIncomeGoal?.toLocaleString() ?? "0"}/mo with {client?.inflationForIncomeGoalPct ?? 0}% inflation.
+              </li>
+              <li>
+                <strong>Current Income:</strong> {income.amountDisplayMode}, {income.colaPct}% COLA, {income.taxRatePct}% tax assumption. Client stop working at {income.client.stopWorkingAge}, spouse at {income.spouse.stopWorkingAge}.
+              </li>
+              <li>
+                <strong>Retirement Income:</strong> Social Security, pensions, annuities, and rentals as entered in Step 3.
+              </li>
+              <li>
+                <strong>Accounts:</strong> Balances, growth rates, and distribution rates as entered in Step 4.
+              </li>
+              <li>
+                <strong>ALIGN Option 1:</strong>{" "}
+                {annuityPrimeOptions?.[0] ? (
+                  <>${(annuityPrimeOptions[0].premiumAmount ?? 0).toLocaleString()} premium, {(annuityPrimeOptions[0].productType ?? "FIA") === "MYGA" ? `${annuityPrimeOptions[0].migaRatePct ?? 0}% MYGA` : `${getPrimeOptionAnnualPayout(annuityPrimeOptions[0]).toLocaleString()}/yr payout`}, income starts at age {annuityPrimeOptions[0].incomeStartAge ?? "—"}.</>
+                ) : (
+                  "None."
+                )}
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="font-medium text-gray-400 mb-1">Financial Disclosures</h4>
+            <p className="text-gray-500 leading-relaxed">
+              This projection is for illustrative purposes only and does not constitute financial, tax, or investment advice. Projections are based on assumptions you have provided; actual results may vary. Past performance does not guarantee future results. Consult a qualified financial advisor before making financial decisions. Annuities are insurance products; guarantees are subject to the claims-paying ability of the issuing carrier.
+            </p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

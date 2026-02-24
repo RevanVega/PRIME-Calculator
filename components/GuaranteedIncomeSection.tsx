@@ -7,7 +7,7 @@ function Input({
   label,
   value,
   onChange,
-  type = "number",
+  type = "text",
 }: {
   label: string;
   value: string | number;
@@ -49,6 +49,13 @@ export default function GuaranteedIncomeSection() {
   const clientLabel = client?.name || "Client";
   const spouseLabel = spouse?.name || "Spouse";
 
+  const parseNumber = (v: string): number => {
+    const cleaned = v.replace(/,/g, "").trim();
+    if (cleaned === "") return 0;
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   return (
     <section className="mb-8 p-6 rounded-xl bg-gray-900/50 border border-gray-700">
       <h2 className="text-lg font-semibold text-white mb-1">Guaranteed income</h2>
@@ -59,11 +66,11 @@ export default function GuaranteedIncomeSection() {
           <h3 className="text-sm font-semibold text-blue-400">Social Security — Client</h3>
           <Input
             label="Projected monthly benefit amount"
-            value={socialSecurityClient.monthlyBenefit || ""}
+            value={socialSecurityClient.monthlyBenefit ? socialSecurityClient.monthlyBenefit.toLocaleString() : ""}
             onChange={(v) =>
               setGuaranteedIncome({
                 ...guaranteedIncome,
-                socialSecurityClient: { ...socialSecurityClient, monthlyBenefit: Number(v) || 0 },
+                socialSecurityClient: { ...socialSecurityClient, monthlyBenefit: parseNumber(v) },
               })
             }
           />
@@ -105,11 +112,11 @@ export default function GuaranteedIncomeSection() {
             <h3 className="text-sm font-semibold text-blue-400">Social Security — Spouse</h3>
             <Input
               label="Monthly income amount"
-              value={socialSecuritySpouse.monthlyBenefit || ""}
+              value={socialSecuritySpouse.monthlyBenefit ? socialSecuritySpouse.monthlyBenefit.toLocaleString() : ""}
               onChange={(v) =>
                 setGuaranteedIncome({
                   ...guaranteedIncome,
-                  socialSecuritySpouse: { ...socialSecuritySpouse, monthlyBenefit: Number(v) || 0 },
+                socialSecuritySpouse: { ...socialSecuritySpouse, monthlyBenefit: parseNumber(v) },
                 })
               }
             />
@@ -168,7 +175,7 @@ export default function GuaranteedIncomeSection() {
                     </select>
                   </div>
                 )}
-                <Input label="Amount (monthly)" value={p.amount || ""} onChange={(v) => updatePension(p.id, { amount: Number(v) || 0 })} />
+                <Input label="Amount (monthly)" value={p.amount ? p.amount.toLocaleString() : ""} onChange={(v) => updatePension(p.id, { amount: parseNumber(v) })} />
                 <Input label="Start age" value={p.startAge || ""} onChange={(v) => updatePension(p.id, { startAge: Number(v) || 0 })} />
                 <Input label="COLA (%)" value={p.colaPct ?? ""} onChange={(v) => updatePension(p.id, { colaPct: Number(v) || 0 })} />
                 <Input label="Tax rate (%)" value={p.taxRatePct ?? ""} onChange={(v) => updatePension(p.id, { taxRatePct: Number(v) || 0 })} />
@@ -201,8 +208,8 @@ export default function GuaranteedIncomeSection() {
                     </select>
                   </div>
                 )}
-                <Input label="Current value ($)" value={a.balance ?? ""} onChange={(v) => updateAnnuity(a.id, { balance: Number(v) || 0 })} />
-                <Input label="Amount (monthly)" value={a.amount || ""} onChange={(v) => updateAnnuity(a.id, { amount: Number(v) || 0 })} />
+                <Input label="Current value ($)" value={a.balance != null && a.balance !== 0 ? a.balance.toLocaleString() : ""} onChange={(v) => updateAnnuity(a.id, { balance: parseNumber(v) })} />
+                <Input label="Amount (monthly)" value={a.amount ? a.amount.toLocaleString() : ""} onChange={(v) => updateAnnuity(a.id, { amount: parseNumber(v) })} />
                 <Input label="Start age" value={a.startAge || ""} onChange={(v) => updateAnnuity(a.id, { startAge: Number(v) || 0 })} />
                 <Input label="COLA (%)" value={a.colaPct ?? ""} onChange={(v) => updateAnnuity(a.id, { colaPct: Number(v) || 0 })} />
                 <Input label="Tax rate (%)" value={a.taxRatePct ?? ""} onChange={(v) => updateAnnuity(a.id, { taxRatePct: Number(v) || 0 })} />
@@ -235,7 +242,7 @@ export default function GuaranteedIncomeSection() {
                     </select>
                   </div>
                 )}
-                <Input label="Amount (monthly)" value={r.amount || ""} onChange={(v) => updateRental(r.id, { amount: Number(v) || 0 })} />
+                <Input label="Amount (monthly)" value={r.amount ? r.amount.toLocaleString() : ""} onChange={(v) => updateRental(r.id, { amount: parseNumber(v) })} />
                 <Input label="Start age" value={r.startAge || ""} onChange={(v) => updateRental(r.id, { startAge: Number(v) || 0 })} />
                 <Input label="COLA (%)" value={r.colaPct ?? ""} onChange={(v) => updateRental(r.id, { colaPct: Number(v) || 0 })} />
                 <Input label="Tax rate (%)" value={r.taxRatePct ?? ""} onChange={(v) => updateRental(r.id, { taxRatePct: Number(v) || 0 })} />

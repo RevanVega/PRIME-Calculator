@@ -26,7 +26,7 @@ Reference: `Excel Templates/Ed Arroyo - Income Summary - for Upload .csv`
 2. **Earned income**: Client and spouse current income, grown by COLA each year, until respective “stop working” age.
 3. **Social Security**: Start at projected SS start age; monthly benefit × 12 (or stored annual), then COLA each year.
 4. **Pension**: Fixed amount from start age (no COLA in this example; could add COLA if needed).
-5. **Guaranteed income from 401k**: Fixed annuity slice (e.g. from PRIME conversion) — flat amount from start age.
+5. **Guaranteed income from 401k**: Fixed annuity slice (e.g. from ALIGN conversion) — flat amount from start age.
 6. **Account buckets**: Initial balance + growth (e.g. 7% / 8%) from current age to retirement → **FV at retirement**. After retirement, apply **distribution rate** (e.g. % of prior-year balance or amortization) to get annual draw. Draw columns = 401k, IRA, Roth, spouse 401k.
 7. **Annual total**: Sum of all income columns for that year.
 8. **Monthly total**: Annual total / 12.
@@ -39,11 +39,11 @@ Reference: `Excel Templates/Ed Arroyo - Income Summary - for Upload .csv`
 - **Income**: `income.client.currentIncomeAnnual`, `income.spouse.currentIncomeAnnual`, `income.colaPct`, stop working ages.
 - **SS**: `guaranteedIncome.socialSecurityClient`, `guaranteedIncome.socialSecuritySpouse` (monthly benefit, start age, COLA).
 - **Pension**: `guaranteedIncome.pensions[]` (amount, start age, survivor).
-- **Guaranteed from 401k**: PRIME annuity — `annuityPrime.payoutAmount`, `annuityPrime.incomeStartAge` (flat, no COLA).
+- **Guaranteed from 401k**: ALIGN annuity — `annuityPrime.payoutAmount`, `annuityPrime.incomeStartAge` (flat, no COLA).
 - **Accounts**: `accounts[]` (type qualified/roth/cash/insurance, balanceOrContributions, growthRatePct, distributionRatePct). Multiple accounts per type possible; CSV has one 401k, one IRA, one Roth, one Rachel 401k.
 - **Target goal**: `client.currentMonthlyIncomeGoal`, `client.inflationForIncomeGoalPct`.
 
 ## What would still help (optional)
 
-- A second CSV or sheet that shows the **PRIME path** (after moving a premium into an annuity): same columns but with “Guaranteed Income From 401k” increased and one account balance reduced, to verify the comparison view.
-- Confirmation of whether “Guaranteed Income From 401k” in the CSV is exactly the PRIME annuity (flat payout from converted premium) or a separate pension/annuity source.
+- A second CSV or sheet that shows the **ALIGN path** (after moving a premium into an annuity): same columns but with “Guaranteed Income From 401k” increased and one account balance reduced, to verify the comparison view.
+- Confirmation of whether “Guaranteed Income From 401k” in the CSV is exactly the ALIGN annuity (flat payout from converted premium) or a separate pension/annuity source.

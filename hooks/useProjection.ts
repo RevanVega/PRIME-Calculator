@@ -4,21 +4,26 @@ import { useMemo } from "react";
 import { useCalculator } from "@/context/CalculatorContext";
 import { runProjection } from "@/lib/projection";
 import type { ProjectionResult } from "@/lib/projection-types";
+import { isPrimeOptionValid } from "@/lib/prime-utils";
 
-export function useProjection(): {
+export function useProjection(options?: { primeOptionsFilter?: "all" | "first" }): {
   current: ProjectionResult;
   prime: ProjectionResult;
   hasPrimePath: boolean;
 } {
   const state = useCalculator();
+  const primeFilter = options?.primeOptionsFilter ?? "all";
 
   return useMemo(() => {
-    const current = runProjection(state, false);
-    const prime = runProjection(state, true);
     const opts = state.annuityPrimeOptions ?? [];
-    const hasPrimePath = opts.some(
-      (o) => o.premiumAmount > 0 && o.payoutAmount > 0
-    );
+    const optsForPrime =
+      primeFilter === "first" && opts[0] ? [opts[0]] : opts;
+    const stateForPrime =
+      primeFilter === "first" ? { ...state, annuityPrimeOptions: optsForPrime } : state;
+
+    const current = runProjection(state, false);
+    const prime = runProjection(stateForPrime, true);
+    const hasPrimePath = optsForPrime.some(isPrimeOptionValid);
 
     return { current, prime, hasPrimePath };
   }, [
@@ -41,5 +46,6 @@ export function useProjection(): {
     JSON.stringify(state.guaranteedIncome),
     JSON.stringify(state.accounts),
     JSON.stringify(state.annuityPrimeOptions),
+    primeFilter,
   ]);
 }

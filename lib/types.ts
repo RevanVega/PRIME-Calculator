@@ -92,17 +92,30 @@ export interface AccountBucket {
   taxRatePct: number;
 }
 
-export type PrimeBenefitOption = "visit" | "singleLife" | "joint";
+export type PrimeBenefitOption = "singleLife" | "joint";
 export type PrimeOwnerOption = "client" | "spouse" | "joint";
+
+/** FIA = Fixed Index Annuity (fixed annual payout, no COLA). MYGA = fixed % of principal for a term; principal intact at renewal. */
+export type PrimeProductType = "FIA" | "MYGA";
+
+/** MYGA term length (years); rate is fixed for this period then renews, principal unchanged. */
+export type MigaTermYears = 3 | 5 | 7;
 
 export interface AnnuityPrimeInputs {
   id: string;
   premiumAmount: number;
   referencedAccountType: AccountType;
   incomeStartAge: number;
-  /** Annual payout amount (no COLA) */
+  /** Product: FIA (fixed payout) or MYGA (fixed % of principal for term). */
+  productType?: PrimeProductType;
+  /** FIA: annual payout amount (no COLA). Not used for MYGA. */
   payoutAmount: number;
+  /** MYGA: guaranteed rate % (e.g. 5 = 5%). Annual income = premiumAmount × (migaRatePct/100). */
+  migaRatePct?: number;
+  /** MYGA: term years (rate locked; at end, rate renews, principal intact). */
+  migaTermYears?: MigaTermYears;
   carrier?: string;
+  /** FIA only: single life or joint. */
   benefitOption: PrimeBenefitOption;
   owner: PrimeOwnerOption;
 }
@@ -120,7 +133,7 @@ export interface CalculatorState {
   income: IncomeInputs;
   guaranteedIncome: GuaranteedIncomeInputs;
   accounts: AccountBucket[];
-  /** PRIME efficiency options (multiple allowed) */
+  /** ALIGN options (multiple allowed) */
   annuityPrimeOptions: AnnuityPrimeInputs[];
 }
 

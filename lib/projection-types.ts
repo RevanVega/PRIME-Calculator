@@ -55,6 +55,8 @@ export interface ProjectionRow {
   guaranteedDollars: number;
   /** Guaranteed income % (0-100) */
   guaranteedPct: number;
+  /** Portfolio total (qualified+roth+taxable+cash+insurance) at start of this year; used for survivor Monte Carlo */
+  portfolioTotalAtStartOfYear?: number;
 }
 
 /** Future value at retirement per account type (before any PRIME premium deduction) */

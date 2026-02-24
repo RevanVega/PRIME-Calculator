@@ -84,14 +84,14 @@ function aggregateByTypeAndOwner(state: CalculatorState) {
   return agg;
 }
 
-/** Sum PRIME premium deductions by account type and owner */
+/** Sum ALIGN premium deductions by account type and owner */
 function primeDeductionsByTypeAndOwner(state: CalculatorState, usePrime: boolean): Map<string, number> {
   // Key format: "accountType:owner" (e.g., "qualified:client", "qualified:spouse")
   const map = new Map<string, number>();
   if (!usePrime || !state.annuityPrimeOptions?.length) return map;
   for (const opt of state.annuityPrimeOptions) {
     if (opt.premiumAmount > 0) {
-      // For joint PRIME, deduct from client by default; for spouse-owned, deduct from spouse
+      // For joint ALIGN, deduct from client by default; for spouse-owned, deduct from spouse
       const deductOwner: Owner = opt.owner === "spouse" ? "spouse" : "client";
       const key = `${opt.referencedAccountType}:${deductOwner}`;
       const prev = map.get(key) ?? 0;
@@ -101,7 +101,7 @@ function primeDeductionsByTypeAndOwner(state: CalculatorState, usePrime: boolean
   return map;
 }
 
-/** Sum PRIME premium deductions by account type (total across owners, for backward compat) */
+/** Sum ALIGN premium deductions by account type (total across owners, for backward compat) */
 function primeDeductionsByType(state: CalculatorState, usePrime: boolean): Map<AccountType, number> {
   const map = new Map<AccountType, number>();
   if (!usePrime || !state.annuityPrimeOptions?.length) return map;
@@ -128,7 +128,7 @@ function futureValuesByTypeAndOwner(
   for (const t of types) {
     for (const o of owners) {
       let balance = agg[t][o].balance;
-      // Deduct PRIME premium from the correct owner's account
+      // Deduct ALIGN premium from the correct owner's account
       const deductKey = `${t}:${o}`;
       const deduct = deductionsByTypeAndOwner.get(deductKey) ?? 0;
       if (deduct > 0) balance = Math.max(0, balance - deduct);
@@ -173,7 +173,7 @@ function futureValuesAtRetirement(
   return fv;
 }
 
-/** Run full projection: current path (usePrimeAnnuity = false) or PRIME path (usePrimeAnnuity = true) */
+/** Run full projection: current path (usePrimeAnnuity = false) or ALIGN path (usePrimeAnnuity = true) */
 export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean): ProjectionResult {
   const startAge = state.client.currentAge;
   const endAge = state.client.projectedPlanAge;
@@ -288,7 +288,7 @@ export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean):
 
     const guaranteedFromPrime = primeOptions
       .filter((opt) => {
-        // Use owner's age for PRIME income start age comparison
+        // Use owner's age for ALIGN income start age comparison
         const ownerAge = opt.owner === "spouse" ? spouseAge : clientAge;
         return ownerAge >= opt.incomeStartAge && getPrimeOptionAnnualPayout(opt) > 0;
       })
