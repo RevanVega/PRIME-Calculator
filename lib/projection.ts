@@ -1,13 +1,26 @@
+/**
+ * Projection Engine
+ *
+ * Timing assumptions:
+ * - Contributions: Added at the START of each year, then grow for the full year.
+ *   Formula: balance = (balance + contributions) * (1 + growthRate)
+ * - Distributions: Withdrawn at the START of each retirement year, then remaining balance grows.
+ *   Formula: balance = (balance - withdrawal) * (1 + growthRate)
+ *
+ * Rate aggregation: When multiple accounts of the same type exist, growth and distribution
+ * rates are calculated as balance-weighted averages.
+ */
 import type { CalculatorState } from "./types";
 import type { ProjectionRow, ProjectionResult, FutureValuesAtRetirement } from "./projection-types";
 import type { AccountType } from "./types";
+import { getPrimeOptionAnnualPayout } from "./prime-utils";
 
 type Owner = "client" | "spouse";
 
 const COLA = (value: number, colaPct: number, years: number) =>
   value * Math.pow(1 + colaPct / 100, years);
 
-/** Aggregate account balances, contributions, and rates by type */
+/** Aggregate account balances, contributions, and rates by type (using balance-weighted average for rates) */
 function aggregateAccountsByType(state: CalculatorState) {
   const agg: Record<AccountType, { balance: number; contributions: number; growthPct: number; distributionPct: number }> = {
     qualified: { balance: 0, contributions: 0, growthPct: 0, distributionPct: 0 },
@@ -16,16 +29,27 @@ function aggregateAccountsByType(state: CalculatorState) {
     cash: { balance: 0, contributions: 0, growthPct: 0, distributionPct: 0 },
     insurance: { balance: 0, contributions: 0, growthPct: 0, distributionPct: 0 },
   };
+  // First pass: sum balances, contributions, and weighted rate numerators
+  const weightedGrowth: Record<AccountType, number> = { qualified: 0, roth: 0, taxable: 0, cash: 0, insurance: 0 };
+  const weightedDist: Record<AccountType, number> = { qualified: 0, roth: 0, taxable: 0, cash: 0, insurance: 0 };
   for (const a of state.accounts) {
     agg[a.type].balance += a.balance;
     agg[a.type].contributions += a.contributions;
-    if (agg[a.type].growthPct === 0) agg[a.type].growthPct = a.growthRatePct;
-    if (agg[a.type].distributionPct === 0) agg[a.type].distributionPct = a.distributionRatePct;
+    weightedGrowth[a.type] += a.balance * a.growthRatePct;
+    weightedDist[a.type] += a.balance * a.distributionRatePct;
+  }
+  // Second pass: compute weighted averages
+  const types: AccountType[] = ["qualified", "roth", "taxable", "cash", "insurance"];
+  for (const t of types) {
+    if (agg[t].balance > 0) {
+      agg[t].growthPct = weightedGrowth[t] / agg[t].balance;
+      agg[t].distributionPct = weightedDist[t] / agg[t].balance;
+    }
   }
   return agg;
 }
 
-/** Aggregate by (type, owner) for per-owner draws */
+/** Aggregate by (type, owner) for per-owner draws (using balance-weighted average for rates) */
 function aggregateByTypeAndOwner(state: CalculatorState) {
   const types: AccountType[] = ["qualified", "roth", "taxable", "cash", "insurance"];
   const owners: Owner[] = ["client", "spouse"];
@@ -33,20 +57,51 @@ function aggregateByTypeAndOwner(state: CalculatorState) {
     AccountType,
     Record<Owner, { balance: number; contributions: number; growthPct: number; distributionPct: number }>
   >;
+  const weightedGrowth: Record<AccountType, Record<Owner, number>> = {} as Record<AccountType, Record<Owner, number>>;
+  const weightedDist: Record<AccountType, Record<Owner, number>> = {} as Record<AccountType, Record<Owner, number>>;
   for (const t of types) {
     agg[t] = { client: { balance: 0, contributions: 0, growthPct: 0, distributionPct: 0 }, spouse: { balance: 0, contributions: 0, growthPct: 0, distributionPct: 0 } };
+    weightedGrowth[t] = { client: 0, spouse: 0 };
+    weightedDist[t] = { client: 0, spouse: 0 };
   }
+  // First pass: sum balances, contributions, and weighted rate numerators
   for (const a of state.accounts) {
     const owner: Owner = a.owner === "spouse" ? "spouse" : "client";
     agg[a.type][owner].balance += a.balance;
     agg[a.type][owner].contributions += a.contributions;
-    if (agg[a.type][owner].growthPct === 0) agg[a.type][owner].growthPct = a.growthRatePct;
-    if (agg[a.type][owner].distributionPct === 0) agg[a.type][owner].distributionPct = a.distributionRatePct;
+    weightedGrowth[a.type][owner] += a.balance * a.growthRatePct;
+    weightedDist[a.type][owner] += a.balance * a.distributionRatePct;
+  }
+  // Second pass: compute weighted averages
+  for (const t of types) {
+    for (const o of owners) {
+      if (agg[t][o].balance > 0) {
+        agg[t][o].growthPct = weightedGrowth[t][o] / agg[t][o].balance;
+        agg[t][o].distributionPct = weightedDist[t][o] / agg[t][o].balance;
+      }
+    }
   }
   return agg;
 }
 
-/** Sum PRIME premium deductions by account type */
+/** Sum PRIME premium deductions by account type and owner */
+function primeDeductionsByTypeAndOwner(state: CalculatorState, usePrime: boolean): Map<string, number> {
+  // Key format: "accountType:owner" (e.g., "qualified:client", "qualified:spouse")
+  const map = new Map<string, number>();
+  if (!usePrime || !state.annuityPrimeOptions?.length) return map;
+  for (const opt of state.annuityPrimeOptions) {
+    if (opt.premiumAmount > 0) {
+      // For joint PRIME, deduct from client by default; for spouse-owned, deduct from spouse
+      const deductOwner: Owner = opt.owner === "spouse" ? "spouse" : "client";
+      const key = `${opt.referencedAccountType}:${deductOwner}`;
+      const prev = map.get(key) ?? 0;
+      map.set(key, prev + opt.premiumAmount);
+    }
+  }
+  return map;
+}
+
+/** Sum PRIME premium deductions by account type (total across owners, for backward compat) */
 function primeDeductionsByType(state: CalculatorState, usePrime: boolean): Map<AccountType, number> {
   const map = new Map<AccountType, number>();
   if (!usePrime || !state.annuityPrimeOptions?.length) return map;
@@ -63,7 +118,7 @@ function primeDeductionsByType(state: CalculatorState, usePrime: boolean): Map<A
 function futureValuesByTypeAndOwner(
   state: CalculatorState,
   retirementAge: number,
-  deductionsByType: Map<AccountType, number>
+  deductionsByTypeAndOwner: Map<string, number>
 ) {
   const agg = aggregateByTypeAndOwner(state);
   const years = Math.max(0, retirementAge - state.client.currentAge);
@@ -71,10 +126,12 @@ function futureValuesByTypeAndOwner(
   const owners: Owner[] = ["client", "spouse"];
   const fv: Record<string, number> = {};
   for (const t of types) {
-    const deduct = deductionsByType.get(t) ?? 0;
     for (const o of owners) {
       let balance = agg[t][o].balance;
-      if (deduct > 0 && o === "client") balance = Math.max(0, balance - deduct);
+      // Deduct PRIME premium from the correct owner's account
+      const deductKey = `${t}:${o}`;
+      const deduct = deductionsByTypeAndOwner.get(deductKey) ?? 0;
+      if (deduct > 0) balance = Math.max(0, balance - deduct);
       const g = agg[t][o].growthPct / 100;
       const contrib = agg[t][o].contributions;
       for (let y = 0; y < years; y++) {
@@ -126,11 +183,12 @@ export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean):
   const colaPct = state.income.colaPct;
 
   const primeDeductions = primeDeductionsByType(state, usePrimeAnnuity);
+  const primeDeductionsByOwner = primeDeductionsByTypeAndOwner(state, usePrimeAnnuity);
 
   const fv = futureValuesAtRetirement(state, retirementAge, primeDeductions);
   const agg = aggregateAccountsByType(state);
   const aggByOwner = aggregateByTypeAndOwner(state);
-  const fvByOwner = futureValuesByTypeAndOwner(state, retirementAge, primeDeductions);
+  const fvByOwner = futureValuesByTypeAndOwner(state, retirementAge, primeDeductionsByOwner);
 
   const rows: ProjectionRow[] = [];
   let qualifiedBalance = fv.qualified;
@@ -190,8 +248,12 @@ export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean):
     let pensionOtherRentalClient = 0;
     let pensionOtherRentalSpouse = 0;
     for (const p of state.guaranteedIncome.pensions) {
-      if (clientAge >= p.startAge) {
-        const amt = COLA(p.amount * 12, p.colaPct, clientAge - p.startAge);
+      // Use owner's age for start/end age comparison
+      const ownerAge = p.owner === "spouse" ? spouseAge : clientAge;
+      const pastStart = ownerAge >= p.startAge;
+      const beforeEnd = p.endAge == null || ownerAge <= p.endAge;
+      if (pastStart && beforeEnd) {
+        const amt = COLA(p.amount * 12, p.colaPct, ownerAge - p.startAge);
         pension += amt;
         if (p.owner === "spouse") pensionOtherRentalSpouse += amt;
         else pensionOtherRentalClient += amt;
@@ -199,8 +261,12 @@ export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean):
     }
     let otherAnnuities = 0;
     for (const a of state.guaranteedIncome.annuities) {
-      if (clientAge >= a.startAge) {
-        const amt = COLA(a.amount * 12, a.colaPct, clientAge - a.startAge);
+      // Use owner's age for start/end age comparison
+      const ownerAge = a.owner === "spouse" ? spouseAge : clientAge;
+      const pastStart = ownerAge >= a.startAge;
+      const beforeEnd = a.endAge == null || ownerAge <= a.endAge;
+      if (pastStart && beforeEnd) {
+        const amt = COLA(a.amount * 12, a.colaPct, ownerAge - a.startAge);
         otherAnnuities += amt;
         if (a.owner === "spouse") pensionOtherRentalSpouse += amt;
         else pensionOtherRentalClient += amt;
@@ -208,8 +274,12 @@ export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean):
     }
     let rental = 0;
     for (const r of state.guaranteedIncome.rentals) {
-      if (clientAge >= r.startAge) {
-        const amt = COLA(r.amount * 12, r.colaPct, clientAge - r.startAge);
+      // Use owner's age for start/end age comparison
+      const ownerAge = r.owner === "spouse" ? spouseAge : clientAge;
+      const pastStart = ownerAge >= r.startAge;
+      const beforeEnd = r.endAge == null || ownerAge <= r.endAge;
+      if (pastStart && beforeEnd) {
+        const amt = COLA(r.amount * 12, r.colaPct, ownerAge - r.startAge);
         rental += amt;
         if (r.owner === "spouse") pensionOtherRentalSpouse += amt;
         else pensionOtherRentalClient += amt;
@@ -217,8 +287,15 @@ export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean):
     }
 
     const guaranteedFromPrime = primeOptions
-      .filter((opt) => clientAge >= opt.incomeStartAge && opt.payoutAmount > 0)
-      .reduce((sum, opt) => sum + opt.payoutAmount, 0);
+      .filter((opt) => {
+        // Use owner's age for PRIME income start age comparison
+        const ownerAge = opt.owner === "spouse" ? spouseAge : clientAge;
+        return ownerAge >= opt.incomeStartAge && getPrimeOptionAnnualPayout(opt) > 0;
+      })
+      .reduce((sum, opt) => sum + getPrimeOptionAnnualPayout(opt), 0);
+
+    const portfolioTotalAtStartOfYear =
+      qualifiedBalance + rothBalance + taxableBalance + cashBalance + insuranceBalance;
 
     const distQ = agg.qualified.distributionPct / 100;
     const distR = agg.roth.distributionPct / 100;
@@ -284,16 +361,17 @@ export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean):
       drawInsuranceSpouse = insuranceBalanceSpouse * distIS;
       drawInsurance = drawInsuranceClient + drawInsuranceSpouse;
 
-      qualifiedBalanceClient = (qualifiedBalanceClient - drawQualifiedClient) * growQC;
-      qualifiedBalanceSpouse = (qualifiedBalanceSpouse - drawQualifiedSpouse) * growQS;
-      rothBalanceClient = (rothBalanceClient - drawRothClient) * growRC;
-      rothBalanceSpouse = (rothBalanceSpouse - drawRothSpouse) * growRS;
-      taxableBalanceClient = (taxableBalanceClient - drawTaxableClient) * growTC;
-      taxableBalanceSpouse = (taxableBalanceSpouse - drawTaxableSpouse) * growTS;
-      cashBalanceClient = (cashBalanceClient - drawCashClient) * growCC;
-      cashBalanceSpouse = (cashBalanceSpouse - drawCashSpouse) * growCS;
-      insuranceBalanceClient = (insuranceBalanceClient - drawInsuranceClient) * growIC;
-      insuranceBalanceSpouse = (insuranceBalanceSpouse - drawInsuranceSpouse) * growIS;
+      // Update balances: withdraw first, then apply growth. Floor at 0 to prevent negative balances.
+      qualifiedBalanceClient = Math.max(0, (qualifiedBalanceClient - drawQualifiedClient) * growQC);
+      qualifiedBalanceSpouse = Math.max(0, (qualifiedBalanceSpouse - drawQualifiedSpouse) * growQS);
+      rothBalanceClient = Math.max(0, (rothBalanceClient - drawRothClient) * growRC);
+      rothBalanceSpouse = Math.max(0, (rothBalanceSpouse - drawRothSpouse) * growRS);
+      taxableBalanceClient = Math.max(0, (taxableBalanceClient - drawTaxableClient) * growTC);
+      taxableBalanceSpouse = Math.max(0, (taxableBalanceSpouse - drawTaxableSpouse) * growTS);
+      cashBalanceClient = Math.max(0, (cashBalanceClient - drawCashClient) * growCC);
+      cashBalanceSpouse = Math.max(0, (cashBalanceSpouse - drawCashSpouse) * growCS);
+      insuranceBalanceClient = Math.max(0, (insuranceBalanceClient - drawInsuranceClient) * growIC);
+      insuranceBalanceSpouse = Math.max(0, (insuranceBalanceSpouse - drawInsuranceSpouse) * growIS);
 
       qualifiedBalance = qualifiedBalanceClient + qualifiedBalanceSpouse;
       rothBalance = rothBalanceClient + rothBalanceSpouse;
@@ -362,6 +440,7 @@ export function runProjection(state: CalculatorState, usePrimeAnnuity: boolean):
       targetGoalAnnual,
       guaranteedDollars,
       guaranteedPct,
+      portfolioTotalAtStartOfYear,
     });
   }
 
